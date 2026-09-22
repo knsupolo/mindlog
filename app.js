@@ -6,7 +6,7 @@
 // 1. 글로벌 상태 및 설정 (State & Configurations)
 // ========================================================
 // 4단계에서 배포할 Google Apps Script 웹앱 URL (비워두면 브라우저 캐시 DB로 자동 구동)
-const GAS_API_URL = "";
+const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyA2NubJNwyaB3LfULBrdsARNpeNcJ9cjZOiFBR4IyNQdjU7jXhd4vmM8-DMjMcwXE_/exec";
 
 let appState = {
   // 사용자 인증
