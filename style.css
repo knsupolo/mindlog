@@ -1,0 +1,54 @@
+* {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  touch-action: manipulation;
+}
+
+/* 탭 전환 스타일 */
+.tab-content {
+  display: none;
+}
+.tab-content.active {
+  display: block;
+  animation: fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 네비게이션 활성화 뱃지 */
+.nav-item.active {
+  color: #4f46e5 !important;
+}
+
+/* 키워드 칩 토글 스타일 */
+.keyword-chip {
+  transition: all 0.15s ease-in-out;
+}
+.keyword-chip.selected {
+  background-color: #4f46e5 !important;
+  color: #ffffff !important;
+  border-color: #4f46e5 !important;
+  transform: scale(0.97);
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3);
+}
+
+/* 부드러운 스크롤 */
+main::-webkit-scrollbar {
+  display: none;
+}
+main {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
