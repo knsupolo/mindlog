@@ -1,1 +1,238 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>마인드로그 (MindLog) - AI 일상 기록</title>
+  
+  <!-- Tailwind CSS & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- 감성 한글 글꼴 (Pretendard) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-100 text-slate-800 flex justify-center min-h-screen">
+
+  <!-- 모바일 뷰 컨테이너 (최대 480px) -->
+  <div class="w-full max-w-md bg-white min-h-screen flex flex-col shadow-2xl relative pb-24">
+    
+    <!-- 1. 상단 헤더 -->
+    <header class="px-5 py-4 bg-white/90 backdrop-blur-md sticky top-0 z-30 border-b border-slate-100 flex items-center justify-between">
+      <div>
+        <span id="currentDateDisplay" class="text-[11px] font-bold tracking-wider text-indigo-600 uppercase">2026. 09. 22 TUE</span>
+        <h1 id="headerTitle" class="text-lg font-black text-slate-900 tracking-tight">오늘의 기록</h1>
+      </div>
+      <div class="flex items-center space-x-2">
+        <button onclick="switchTab('report')" class="w-9 h-9 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600 hover:text-indigo-600 transition shadow-xs">
+          <i data-lucide="sparkles" class="w-4 h-4 text-amber-500"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- 2. 메인 콘텐츠 영역 (탭 전환) -->
+    <main class="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+      
+      <!-- ================= 탭 1: 기록하기 (Record Tab) ================= -->
+      <section id="tab-record" class="tab-content space-y-5 active">
+        
+        <!-- (1) 사진 1~3장 첨부 카드 -->
+        <div class="bg-slate-50 border border-slate-200/80 rounded-3xl p-4 shadow-xs">
+          <div class="flex items-center justify-between mb-3 px-1">
+            <div class="flex items-center space-x-1.5">
+              <i data-lucide="images" class="w-4 h-4 text-indigo-600"></i>
+              <h2 class="text-xs font-black text-slate-800">오늘의 순간 <span class="text-indigo-600 font-extrabold">(1~3장)</span></h2>
+            </div>
+            <span id="photoCountBadge" class="text-[11px] font-bold text-slate-400">0 / 3</span>
+          </div>
+
+          <!-- 사진 미리보기 그리드 -->
+          <div id="photoGrid" class="grid grid-cols-3 gap-2.5">
+            <!-- 추가 버튼 -->
+            <button id="addPhotoBtn" onclick="triggerFileInput()" type="button" class="aspect-square rounded-2xl border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-white flex flex-col items-center justify-center space-y-1 text-slate-400 hover:text-indigo-600 transition active:scale-95 shadow-2xs">
+              <i data-lucide="plus" class="w-6 h-6"></i>
+              <span class="text-[10px] font-bold">사진 추가</span>
+            </button>
+          </div>
+          <input type="file" id="photoInput" accept="image/*" multiple class="hidden" onchange="handlePhotoSelect(event)">
+        </div>
+
+        <!-- (2) 오늘의 감정 & 일상 키워드 칩 선택 영역 -->
+        <div class="bg-slate-50 border border-slate-200/80 rounded-3xl p-4 shadow-xs space-y-3">
+          <div class="flex items-center justify-between px-1">
+            <div class="flex items-center space-x-1.5">
+              <i data-lucide="tag" class="w-4 h-4 text-indigo-600"></i>
+              <h2 class="text-xs font-black text-slate-800">오늘의 감정 & 일상 키워드</h2>
+            </div>
+            <span class="text-[10px] font-medium text-slate-400">다중 선택 가능</span>
+          </div>
+
+          <!-- 키워드 칩 묶음 -->
+          <div id="keywordChipsContainer" class="flex flex-wrap gap-1.5">
+            <!-- 기본 프리셋 키워드들 (JS에서 동적 렌더링) -->
+          </div>
+
+          <!-- 직접 키워드 입력 필드 -->
+          <div class="flex items-center space-x-1.5 pt-1">
+            <input type="text" id="customKeywordInput" placeholder="직접 키워드 입력 (예: 맛집탐방, 야근)" 
+              class="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400">
+            <button onclick="addCustomKeyword()" type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shrink-0 active:scale-95">
+              추가
+            </button>
+          </div>
+        </div>
+
+        <!-- (3) AI 일기 자동 생성 버튼 -->
+        <button id="generateDiaryBtn" onclick="generateAIDiary()" type="button" class="w-full bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:opacity-95 text-white font-black py-3.5 rounded-2xl text-sm shadow-md flex items-center justify-center space-x-2 transition active:scale-98">
+          <i data-lucide="sparkles" class="w-4 h-4 text-amber-300 animate-pulse"></i>
+          <span>AI로 오늘의 일기 작성하기</span>
+        </button>
+
+        <!-- (4) AI 작성 일기 카드 & 감정 피드백 (생성 후 노출) -->
+        <div id="diaryResultCard" class="hidden bg-white border border-indigo-100 rounded-3xl p-5 shadow-sm space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-ping"></span>
+              <h3 class="font-extrabold text-sm text-slate-900">AI가 돌아본 오늘</h3>
+            </div>
+            <span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Gemini Vision</span>
+          </div>
+
+          <!-- AI 일기 본문 텍스트 -->
+          <div id="aiDiaryText" class="text-xs sm:text-sm text-slate-700 leading-relaxed font-medium whitespace-pre-line">
+            <!-- 텍스트 자동 삽입 -->
+          </div>
+
+          <!-- 피드백 루프 상호작용 -->
+          <div class="pt-3 border-t border-slate-100 space-y-2">
+            <span class="text-[11px] font-bold text-slate-500 block">AI의 분석에 대한 나의 마음은?</span>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button onclick="submitFeedback('공감해요 ❤️')" class="feedback-btn bg-slate-50 hover:bg-rose-50 border border-slate-200 text-slate-700 text-[11px] font-bold py-2 rounded-xl flex items-center justify-center space-x-1 transition active:scale-95">
+                <span>공감해요 ❤️</span>
+              </button>
+              <button onclick="submitFeedback('새로운 발견 💡')" class="feedback-btn bg-slate-50 hover:bg-amber-50 border border-slate-200 text-slate-700 text-[11px] font-bold py-2 rounded-xl flex items-center justify-center space-x-1 transition active:scale-95">
+                <span>몰랐던 감정 💡</span>
+              </button>
+              <button onclick="submitFeedback('내 맘과 달라요 ✍️')" class="feedback-btn bg-slate-50 hover:bg-indigo-50 border border-slate-200 text-slate-700 text-[11px] font-bold py-2 rounded-xl flex items-center justify-center space-x-1 transition active:scale-95">
+                <span>달라요 ✍️</span>
+              </button>
+            </div>
+            <input type="text" id="feedbackCommentInput" placeholder="피드백 코멘트 한 줄 남기기 (선택)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 outline-none focus:ring-1 focus:ring-indigo-400 mt-1">
+            <button onclick="saveCompleteEntry()" type="button" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs transition active:scale-95 shadow-xs">
+              오늘의 기록 최종 저장
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================= 탭 2: 타임라인 (Setlog 카드 뷰) ================= -->
+      <section id="tab-timeline" class="tab-content space-y-4">
+        <div class="flex items-center justify-between px-1">
+          <h2 class="text-xs font-black text-slate-600 uppercase tracking-wider">최근 일상 타임라인</h2>
+          <span class="text-[10px] text-slate-400">사진 & 코멘트 모아보기</span>
+        </div>
+        
+        <!-- 타임라인 피드 컨테이너 -->
+        <div id="timelineContainer" class="space-y-4">
+          <!-- JS로 과거 기록 카드 렌더링 -->
+        </div>
+      </section>
+
+      <!-- ================= 탭 3: 감정 리포트 (통계 & 인사이트) ================= -->
+      <section id="tab-report" class="tab-content space-y-4">
+        <div class="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-5 text-white shadow-md">
+          <span class="text-[10px] font-extrabold uppercase bg-white/20 px-2 py-0.5 rounded-full">Monthly Report</span>
+          <h2 class="text-lg font-black mt-2 mb-1">9월의 감정 흐름 분석</h2>
+          <p class="text-xs text-white/80 leading-relaxed">이번 달은 '신남'과 '야구/운동' 키워드가 주를 이루었으며, 긍정적인 감정 에너지가 78%에 달했습니다!</p>
+        </div>
+
+        <div class="bg-white border border-slate-200/80 rounded-3xl p-4 shadow-xs space-y-3">
+          <h3 class="text-xs font-black text-slate-800">가장 많이 느낀 감정 TOP 3</h3>
+          <div class="space-y-2">
+            <div>
+              <div class="flex justify-between text-xs font-bold mb-1"><span>1. 신남 / 활기참 🔥</span><span class="text-indigo-600 font-black">45%</span></div>
+              <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div class="bg-indigo-600 h-full w-[45%]"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs font-bold mb-1"><span>2. 뿌듯함 / 성취감 ✨</span><span class="text-emerald-600 font-black">33%</span></div>
+              <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div class="bg-emerald-500 h-full w-[33%]"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs font-bold mb-1"><span>3. 피곤 / 휴식필요 🥱</span><span class="text-amber-600 font-black">22%</span></div>
+              <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div class="bg-amber-500 h-full w-[22%]"></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 탭 4: 플래너 (일정, 할일, 메모) ================= -->
+      <section id="tab-planner" class="tab-content space-y-4">
+        <!-- 해야 할 일 (To-Do) -->
+        <div class="bg-white border border-slate-200/80 rounded-3xl p-4 shadow-xs space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-black text-slate-800 flex items-center space-x-1.5">
+              <i data-lucide="check-square" class="w-4 h-4 text-emerald-600"></i>
+              <span>오늘의 To-Do 리스트</span>
+            </h3>
+            <span id="todoStats" class="text-[10px] font-bold text-slate-400">0/0 완료</span>
+          </div>
+
+          <div class="flex space-x-1.5">
+            <input type="text" id="newTodoInput" placeholder="새로운 할 일 작성..." class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-1 focus:ring-emerald-500">
+            <button onclick="addTodoItem()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition active:scale-95 shrink-0">등록</button>
+          </div>
+
+          <ul id="todoList" class="space-y-1.5 pt-1">
+            <!-- 투두 아이템 렌더링 -->
+          </ul>
+        </div>
+
+        <!-- 빠른 메모 패드 -->
+        <div class="bg-white border border-slate-200/80 rounded-3xl p-4 shadow-xs space-y-2">
+          <h3 class="text-xs font-black text-slate-800 flex items-center space-x-1.5">
+            <i data-lucide="file-text" class="w-4 h-4 text-amber-500"></i>
+            <span>빠른 아이디어 메모</span>
+          </h3>
+          <textarea id="quickMemoArea" rows="4" placeholder="떠오르는 아이디어나 잊지 말아야 할 것을 자유롭게 적어두세요." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs leading-relaxed outline-none focus:ring-1 focus:ring-amber-500 resize-none font-medium"></textarea>
+          <div class="flex justify-end">
+            <button onclick="saveQuickMemo()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition active:scale-95">메모 저장</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- 3. 하단 네비게이션 독 (App-Dock 바) -->
+    <nav class="fixed bottom-0 max-w-md w-full bg-white/95 backdrop-blur-md border-t border-slate-200 px-6 py-2.5 flex items-center justify-between z-40 shadow-xl">
+      <button onclick="switchTab('record')" id="nav-record" class="nav-item flex flex-col items-center space-y-1 text-indigo-600 active">
+        <i data-lucide="pencil-line" class="w-5 h-5"></i>
+        <span class="text-[10px] font-bold">기록</span>
+      </button>
+      <button onclick="switchTab('timeline')" id="nav-timeline" class="nav-item flex flex-col items-center space-y-1 text-slate-400 hover:text-slate-600">
+        <i data-lucide="layout-grid" class="w-5 h-5"></i>
+        <span class="text-[10px] font-bold">타임라인</span>
+      </button>
+      <button onclick="switchTab('report')" id="nav-report" class="nav-item flex flex-col items-center space-y-1 text-slate-400 hover:text-slate-600">
+        <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
+        <span class="text-[10px] font-bold">리포트</span>
+      </button>
+      <button onclick="switchTab('planner')" id="nav-planner" class="nav-item flex flex-col items-center space-y-1 text-slate-400 hover:text-slate-600">
+        <i data-lucide="calendar" class="w-5 h-5"></i>
+        <span class="text-[10px] font-bold">플래너</span>
+      </button>
+    </nav>
+
+    <!-- 토스트 알림창 -->
+    <div id="toast" class="fixed top-16 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white px-4 py-2 rounded-2xl text-xs font-bold shadow-xl opacity-0 pointer-events-none transition-all duration-300 z-50 flex items-center space-x-1.5">
+      <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-400"></i>
+      <span id="toastMsg">알림 메시지</span>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
 
