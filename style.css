@@ -1,7 +1,8 @@
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+@import url('https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Dongle:wght@400;700&family=Gaegu:wght@400;700&family=Gowun+Dodum&family=Jua&family=Nanum+Pen+Script&display=swap');
 
 /* ========================================================
-   1. 전역 리셋 & 모바일/태블릿 터치 제어
+   1. 전역 리셋 & 모바일/태블릿 터치 제스처 최적화
    ======================================================== */
 * {
   font-family: var(--app-font, 'Pretendard'), -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
@@ -11,7 +12,7 @@
 
 body {
   touch-action: manipulation;
-  background-color: #f8fafc;
+  background-color: #f1f5f9;
   color: #1e293b;
   overscroll-behavior-y: none;
 }
@@ -26,7 +27,7 @@ body {
 }
 
 /* ========================================================
-   2. 동적 테마 CSS 변수 엔진 (관리자 설정 실시간 연동)
+   2. 동적 테마 CSS 변수 엔진 (8종 컬러 팔레트 연동)
    ======================================================== */
 :root {
   --theme-primary: #4f46e5;
@@ -34,10 +35,9 @@ body {
   --theme-primary-light: #eef2ff;
   --theme-primary-border: #c7d2fe;
   --theme-text-on-primary: #ffffff;
-  --app-radius: 1.5rem;
+  --app-radius: 1.25rem;
 }
 
-/* 테마 바인딩 유틸리티 클래스 */
 .bg-theme {
   background-color: var(--theme-primary) !important;
   color: var(--theme-text-on-primary) !important;
@@ -66,7 +66,6 @@ body {
 /* ========================================================
    3. 달력 요일 및 공휴일 표준 컬러링
    ======================================================== */
-/* 일요일 및 법정 공휴일 (선명한 빨간색) */
 .day-sunday,
 .day-holiday {
   color: #e11d48 !important;
@@ -82,21 +81,19 @@ body {
   line-height: 1;
 }
 
-/* 토요일 (진한 파란색) */
 .day-saturday {
   color: #1d4ed8 !important;
   font-weight: 800;
 }
 
-/* 평일 */
 .day-weekday {
   color: #334155;
   font-weight: 700;
 }
 
-/* 포토 캘린더 날짜 셀 카드 */
+/* 캘린더 날짜 셀 */
 .calendar-cell {
-  aspect-ratio: 1 / 1.15;
+  aspect-ratio: 1 / 1.18;
   border-radius: 16px;
   position: relative;
   overflow: hidden;
@@ -113,14 +110,22 @@ body {
   background-size: cover;
   background-position: center;
   border: 1px solid rgba(255, 255, 255, 0.85);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 .calendar-cell.today {
   border: 2px solid var(--theme-primary) !important;
 }
 
+/* 달력 내 다채로운 인디케이터 (일정/투두/메모) */
+.cell-indicator-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  display: inline-block;
+}
+
 /* ========================================================
-   4. 달력 위 인터랙티브 스티커 캔버스 (핀치-줌/회전 터치 제스처)
+   4. 달력 위 인터랙티브 스티커 캔버스 & 플로팅 돋보기(Loupe)
    ======================================================== */
 .sticker-canvas-container {
   position: absolute;
@@ -141,6 +146,7 @@ body {
   justify-content: center;
   transition: box-shadow 0.15s ease;
   line-height: 1;
+  padding: 2px 6px;
 }
 .canvas-sticker:active {
   cursor: grabbing;
@@ -152,10 +158,43 @@ body {
   background-color: rgba(255, 255, 255, 0.5);
 }
 
+/* 🌟 손가락 가림 방지 플로팅 경계선 돋보기 (Boundary Loupe) */
+#stickerLoupe {
+  position: fixed;
+  width: 120px;
+  height: 120px;
+  border-radius: 9999px;
+  pointer-events: none;
+  z-index: 100;
+  border: 3px solid var(--theme-primary);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.35), inset 0 0 12px rgba(0, 0, 0, 0.15);
+  background-color: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(2px);
+  overflow: hidden;
+  display: none;
+  transform: translate(-50%, -130%);
+}
+#stickerLoupe::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  box-shadow: inset 0 0 8px rgba(79, 70, 229, 0.4);
+}
+#stickerLoupeContent {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  transform: scale(1.6);
+  opacity: 0.85;
+}
+
 /* ========================================================
-   5. 가로 와이드 풀필(Full-Fill) 사진 레이아웃 (1장, 2장, 3장)
+   5. 가로 와이드 풀필(Full-Fill) 사진 레이아웃
    ======================================================== */
-/* 1장 첨부 시: 16:9 와이드 가득 채움 */
 .wide-media-single {
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -164,7 +203,6 @@ body {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
-/* 2장 첨부 시: 1:1 좌우 균등 분할 와이드 */
 .wide-media-double {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -182,7 +220,6 @@ body {
   object-fit: cover;
 }
 
-/* 3장 첨부 시: 메거진형 비대칭 와이드 (좌측 1장 와이드 메인, 우측 2장 상하 적층) */
 .wide-media-triple {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
@@ -207,23 +244,64 @@ body {
 }
 
 /* ========================================================
-   6. 바텀시트 (단일 미디어 담기 및 액션 시트)
+   6. 가변 접이식 하단 네비게이션 독 (Collapsible Dock)
    ======================================================== */
-.bottom-sheet-backdrop {
-  background-color: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(4px);
-  transition: opacity 0.25s ease;
+#bottomDock {
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.bottom-sheet-panel {
+#bottomDock.dock-collapsed {
   transform: translateY(100%);
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.bottom-sheet-panel.show {
-  transform: translateY(0);
+
+/* 슬림 글래스 토글 핸들 */
+#dockToggleHandle {
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 44px;
+  height: 22px;
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid #e2e8f0;
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.04);
+  z-index: 50;
+  transition: all 0.2s ease;
+}
+#dockToggleHandle:hover {
+  background-color: #ffffff;
+  color: var(--theme-primary);
 }
 
 /* ========================================================
-   7. 탭 전환 및 애니메이션
+   7. 음성 메모 녹음 엔진 (15~60초) & 시각 펄스 파형
+   ======================================================== */
+@keyframes audioPulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.7); }
+  70% { transform: scale(1.06); box-shadow: 0 0 0 16px rgba(225, 29, 72, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(225, 29, 72, 0); }
+}
+
+.recording-pulse {
+  animation: audioPulse 1.4s infinite cubic-bezier(0.4, 0, 0.6, 1);
+  background-color: #e11d48 !important;
+  color: #ffffff !important;
+}
+
+/* 파스텔 포스트잇 메모 카드 테마 */
+.memo-card-yellow { background-color: #fef9c3; border-color: #fef08a; color: #854d0e; }
+.memo-card-mint   { background-color: #d1fae5; border-color: #a7f3d0; color: #065f46; }
+.memo-card-lavender { background-color: #ede9fe; border-color: #ddd6fe; color: #5b21b6; }
+.memo-card-sky    { background-color: #e0f2fe; border-color: #bae6fd; color: #0369a1; }
+
+/* ========================================================
+   8. 탭 전환 및 피드백 칩
    ======================================================== */
 .tab-content {
   display: none;
@@ -234,22 +312,10 @@ body {
 }
 
 @keyframes tabFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-/* ========================================================
-   8. 피드백 버튼, 별점, 스티커 칩
-   ======================================================== */
-.feedback-btn {
-  transition: all 0.15s ease;
-}
 .feedback-btn.selected {
   background-color: var(--theme-primary-light) !important;
   border-color: var(--theme-primary) !important;
@@ -258,9 +324,6 @@ body {
   box-shadow: inset 0 0 0 1px var(--theme-primary);
 }
 
-.keyword-chip {
-  transition: all 0.15s ease;
-}
 .keyword-chip.selected {
   background-color: var(--theme-primary) !important;
   color: #ffffff !important;
@@ -269,32 +332,32 @@ body {
   box-shadow: 0 2px 4px rgba(79, 70, 229, 0.25);
 }
 
-/* 별점 터치 인터랙션 */
-.star-rating-icon {
-  color: #cbd5e1;
-  transition: color 0.15s ease, transform 0.1s ease;
-  cursor: pointer;
-}
-.star-rating-icon.active {
-  color: #f59e0b;
-}
-.star-rating-icon:active {
-  transform: scale(1.2);
-}
-
-/* 역할 선택 버튼 (학생, 교사, 일반) */
-.role-select-btn {
-  transition: all 0.15s ease;
-}
-.role-select-btn.selected {
-  background-color: var(--theme-primary) !important;
-  color: #ffffff !important;
-  border-color: var(--theme-primary) !important;
-  font-weight: 800;
+/* ========================================================
+   9. 월간 마인드로그 매거진 인쇄 조판 (@media print)
+   ======================================================== */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+  header, #bottomDock, #dockToggleHandle, .no-print, button {
+    display: none !important;
+  }
+  #appContainer {
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+  .magazine-page {
+    page-break-after: always;
+    padding: 20mm;
+    min-height: 297mm;
+  }
 }
 
 /* ========================================================
-   9. 아이패드 / 태블릿 / 가로 모드 (Split View)
+   10. 태블릿 / 아이패드 / 가로 모드 (Split View)
    ======================================================== */
 @media (min-width: 1024px) {
   #appContainer {
