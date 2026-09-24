@@ -2,7 +2,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Dongle:wght@400;700&family=Gaegu:wght@400;700&family=Gowun+Dodum&family=Jua&family=Nanum+Pen+Script&display=swap');
 
 /* ========================================================
-   1. 전역 리셋 & 모바일/태블릿 터치 제스처 최적화
+   1. 전역 리셋 & 터치/제스처 최적화
    ======================================================== */
 * {
   font-family: var(--app-font, 'Pretendard'), -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
@@ -17,7 +17,6 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* 스크롤바 숨김 유틸리티 */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -27,7 +26,7 @@ body {
 }
 
 /* ========================================================
-   2. 동적 테마 CSS 변수 엔진 (8종 컬러 팔레트 연동)
+   2. 동적 테마 CSS 변수 엔진 (8종 테마 팔레트)
    ======================================================== */
 :root {
   --theme-primary: #4f46e5;
@@ -64,7 +63,7 @@ body {
 }
 
 /* ========================================================
-   3. 달력 요일 및 공휴일 표준 컬러링
+   3. 캘린더 요일 및 공휴일 표준 컬러링
    ======================================================== */
 .day-sunday,
 .day-holiday {
@@ -101,6 +100,7 @@ body {
   cursor: pointer;
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
+  z-index: 1;
 }
 .calendar-cell:hover {
   border-color: var(--theme-primary);
@@ -116,7 +116,6 @@ body {
   border: 2px solid var(--theme-primary) !important;
 }
 
-/* 달력 내 다채로운 인디케이터 (일정/투두/메모) */
 .cell-indicator-dot {
   width: 5px;
   height: 5px;
@@ -125,20 +124,22 @@ body {
 }
 
 /* ========================================================
-   4. 달력 위 인터랙티브 스티커 캔버스 & 플로팅 돋보기(Loupe)
+   4. 스티커 캔버스 & 날짜 터치 통과(Passthrough) 버그 수정
    ======================================================== */
+/* 🌟 버그 해결 1: 캔버스 컨테이너는 클릭을 통과시키고, 스티커만 터치 감지 */
 .sticker-canvas-container {
   position: absolute;
   inset: 0;
-  pointer-events: auto;
+  pointer-events: none !important;
   overflow: visible;
-  z-index: 15;
+  z-index: 10;
 }
 
 .canvas-sticker {
   position: absolute;
   user-select: none;
-  touch-action: none;
+  touch-action: none !important;
+  pointer-events: auto !important;
   transform-origin: center center;
   cursor: grab;
   display: inline-flex;
@@ -155,10 +156,10 @@ body {
   outline: 2px dashed var(--theme-primary);
   outline-offset: 3px;
   border-radius: 8px;
-  background-color: rgba(255, 255, 255, 0.5);
+  background-color: rgba(255, 255, 255, 0.6);
 }
 
-/* 🌟 손가락 가림 방지 플로팅 경계선 돋보기 (Boundary Loupe) */
+/* 🌟 손가락 가림 방지 2단계 플로팅 돋보기 (Boundary Loupe) */
 #stickerLoupe {
   position: fixed;
   width: 120px;
@@ -168,11 +169,11 @@ body {
   z-index: 100;
   border: 3px solid var(--theme-primary);
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.35), inset 0 0 12px rgba(0, 0, 0, 0.15);
-  background-color: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(2px);
+  background-color: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(4px);
   overflow: hidden;
   display: none;
-  transform: translate(-50%, -130%);
+  transform: translate(-50%, -135%);
 }
 #stickerLoupe::after {
   content: '';
@@ -187,13 +188,85 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 30px;
   transform: scale(1.6);
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
 /* ========================================================
-   5. 가로 와이드 풀필(Full-Fill) 사진 레이아웃
+   5. 스타일러스(애플펜슬 / S펜) 드로잉 캔버스 & 툴바
+   ======================================================== */
+#drawingCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 15;
+  touch-action: none;
+}
+#drawingCanvas.drawing-active {
+  pointer-events: auto !important;
+  cursor: crosshair;
+}
+
+/* 플로팅 미니 펜툴 바 (Toolbar) */
+#drawingToolbar {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 30;
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+#drawingToolbar.hidden-toolbar {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px);
+}
+
+.draw-tool-btn {
+  padding: 6px;
+  border-radius: 12px;
+  color: #64748b;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.draw-tool-btn:hover {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+.draw-tool-btn.active {
+  background-color: var(--theme-primary-light);
+  color: var(--theme-primary);
+  font-weight: 800;
+}
+
+.palette-color-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+.palette-color-dot.active {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 2px var(--theme-primary);
+}
+
+/* ========================================================
+   6. 가로 와이드 풀필(Full-Fill) 사진 레이아웃
    ======================================================== */
 .wide-media-single {
   width: 100%;
@@ -244,7 +317,7 @@ body {
 }
 
 /* ========================================================
-   6. 가변 접이식 하단 네비게이션 독 (Collapsible Dock)
+   7. 가변 접이식 하단 네비게이션 독 (Collapsible Dock)
    ======================================================== */
 #bottomDock {
   transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
@@ -253,7 +326,6 @@ body {
   transform: translateY(100%);
 }
 
-/* 슬림 글래스 토글 핸들 */
 #dockToggleHandle {
   position: absolute;
   top: -22px;
@@ -280,7 +352,7 @@ body {
 }
 
 /* ========================================================
-   7. 음성 메모 녹음 엔진 (15~60초) & 시각 펄스 파형
+   8. 음성 메모 녹음 엔진 & 펄스 애니메이션
    ======================================================== */
 @keyframes audioPulse {
   0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.7); }
@@ -294,14 +366,13 @@ body {
   color: #ffffff !important;
 }
 
-/* 파스텔 포스트잇 메모 카드 테마 */
-.memo-card-yellow { background-color: #fef9c3; border-color: #fef08a; color: #854d0e; }
-.memo-card-mint   { background-color: #d1fae5; border-color: #a7f3d0; color: #065f46; }
+.memo-card-yellow   { background-color: #fef9c3; border-color: #fef08a; color: #854d0e; }
+.memo-card-mint     { background-color: #d1fae5; border-color: #a7f3d0; color: #065f46; }
 .memo-card-lavender { background-color: #ede9fe; border-color: #ddd6fe; color: #5b21b6; }
-.memo-card-sky    { background-color: #e0f2fe; border-color: #bae6fd; color: #0369a1; }
+.memo-card-sky      { background-color: #e0f2fe; border-color: #bae6fd; color: #0369a1; }
 
 /* ========================================================
-   8. 탭 전환 및 피드백 칩
+   9. 탭 전환 및 피드백 칩
    ======================================================== */
 .tab-content {
   display: none;
@@ -333,14 +404,14 @@ body {
 }
 
 /* ========================================================
-   9. 월간 마인드로그 매거진 인쇄 조판 (@media print)
+   10. 월간 매거진 A4 인쇄 조판 (@media print)
    ======================================================== */
 @media print {
   body {
     background-color: #ffffff !important;
     color: #000000 !important;
   }
-  header, #bottomDock, #dockToggleHandle, .no-print, button {
+  header, #bottomDock, #dockToggleHandle, #drawingToolbar, .no-print, button {
     display: none !important;
   }
   #appContainer {
@@ -357,7 +428,7 @@ body {
 }
 
 /* ========================================================
-   10. 태블릿 / 아이패드 / 가로 모드 (Split View)
+   11. 태블릿 / 아이패드 / 가로 모드 (Split View)
    ======================================================== */
 @media (min-width: 1024px) {
   #appContainer {
