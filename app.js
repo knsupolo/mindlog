@@ -1,15 +1,21 @@
 /**
- * 마인드로그 (MindLog) Pro v2.0 - Core Application Engine
+ * 마인드로그 (MindLog) Pro v2.1 Pro - Core Application Engine
+ * - 백엔드 연동: Google Apps Script Web App
+ * - 기능: 스타일러스(애플펜슬/S펜) 드로잉, 스티커 터치 통과 및 돋보기, AI 맞춤 페르소나 동적 주입, 계정 찾기
  */
 
 // ========================================================
-// 1. 글로벌 상태 및 시스템 환경 변수 (State Management)
+// 1. 글로벌 상태 및 환경 설정 (State Management)
 // ========================================================
-const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyA2NubJNwyaB3LfULBrdsARNpeNcJ9cjZOiFBR4IyNQdjU7jXhd4vmM8-DMjMcwXE_/exec"; // Google Apps Script 배포 URL (미입력 시 브라우저 로컬 DB 모드로 완전 구동)
+const APP_VERSION = "v2.1 Pro";
+const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyA2NubJNwyaB3LfULBrdsARNpeNcJ9cjZOiFBR4IyNQdjU7jXhd4vmM8-DMjMcwXE_/exec";
 
 let appState = {
-  // 사용자 계정 & 마이 페르소나
-  currentUser: null, // { email, role, birth }
+  // 인증 및 세션
+  currentUser: null, // { email, birth, name, phone }
+  autoLogin: true,
+
+  // AI 마이 페르소나 (내 정보 관리)
   persona: {
     job: "고등학교 체육교사",
     mbti: "ENFP",
@@ -33,19 +39,21 @@ let appState = {
     diary: '',
     feedback: '행복한 여운 🥰',
     userComment: '',
-    voiceAudio: null, // base64 또는 Blob URL
+    voiceAudio: null,
     voiceTranscript: '',
-    voiceDuration: 0
+    voiceDuration: 0,
+    interviewAnswer: ''
   },
 
-  // 영구 보관 데이터베이스 (Local + GAS 시트 동기화)
+  // 영구 보관 데이터베이스
   entries: [],
-  schedules: [], // { id, date, title, time, color }
-  stickers: [],  // { id, date, sticker, font, color, hasBg, x, y, scale, rotation }
+  schedules: [],
+  stickers: [],
+  drawings: {}, // { "YYYY-MM-DD": [strokes] }
   todos: {
     today: [
       { id: 1, text: "오후 조깅 및 가벼운 스트레칭", done: true },
-      { id: 2, text: "마인드로그 Pro v2.0 테스트", done: false }
+      { id: 2, text: "마인드로그 Pro v2.1 Pro 테스트", done: false }
     ],
     week: [{ id: 3, text: "주간 감정 리포트 돌아보기", done: false }],
     month: [{ id: 4, text: "한 달 독서 2권 완독하기", done: false }],
@@ -53,13 +61,13 @@ let appState = {
     long: [{ id: 6, text: "가족과 함께하는 힐링 여행 계획하기", done: false }]
   },
   currentTodoScope: 'all',
-  
+
   // 다차원 메모 시스템
   memos: [
     { id: 1, type: 'quick', date: null, text: "가을맞이 플래너 루틴 재정비 및 독서 목록 정리", color: 'yellow', isPinned: true, createdAt: "2026. 09. 23 11:20" },
-    { id: 2, type: 'date', date: '2026-09-25', text: "체육관 매트 소독 점검 및 용구 정돈", color: 'mint', isPinned: false, createdAt: "2026. 09. 25 09:10" }
+    { id: 2, type: 'date', date: '2026-09-25', text: "체육관 매트 소독 점검 및 체육 용구 정돈", color: 'mint', isPinned: false, createdAt: "2026. 09. 25 09:10" }
   ],
-  memoFilter: 'all', // all | week | month | pin
+  memoFilter: 'all',
   memoSelectedColor: 'yellow',
 
   // 리뷰 및 고객센터
@@ -71,7 +79,7 @@ let appState = {
     { id: 1, author: "기록러", pw: "1234", content: "아이패드 가로 모드에서도 사진이 시원하게 잘 보여서 너무 좋습니다.", reply: "소중한 의견 감사드립니다! 더욱 편리한 기록 경험을 제공하겠습니다.", date: "2026. 09. 22" }
   ],
   notices: [
-    { id: 1, text: "마인드로그 Pro v2.0 정식 배포! 달력 스티커와 음성 일기 믹스를 만나보세요.", date: "2026. 09. 25" }
+    { id: 1, text: `[${APP_VERSION}] 애플펜슬 드로잉 지원, 날짜/스티커 터치 버그 수정, 내 정보(마이페이지) 통합`, date: "2026. 09. 25" }
   ],
   recentKeywords: ["가을바람", "야간라이딩", "퇴근길", "성취감", "소소한행복"],
 
@@ -81,13 +89,15 @@ let appState = {
   reportPeriod: 'month',
   timelineViewMode: 'card',
   isDockCollapsed: false,
+  isDrawingMode: false,
+  isDrawingVisible: true,
 
   // 보안 관리자
   adminFailedCount: 0,
   adminLockUntil: null
 };
 
-// 테마 컬러 팔레트
+// 8종 테마 컬러 팔레트
 const THEME_PALETTES = {
   indigo:   { primary: '#4f46e5', hover: '#4338ca', light: '#eef2ff', border: '#c7d2fe' },
   rose:     { primary: '#e11d48', hover: '#be123c', light: '#ffe4e6', border: '#fecdd3' },
@@ -107,10 +117,19 @@ const PRESET_KEYWORDS = [
   "독서 📖", "취미생활 🎨", "가족과함께 👨‍👩‍👦", "친구만남 🍻", "휴식/쉼 🛋️", "새로운도전 🚀"
 ];
 
-// 성격 키워드 태그 목록 (페르소나용)
+// AI 인터뷰어 질문 프리셋
+const INTERVIEW_QUESTIONS = [
+  "오늘 하루 가장 마음이 머물렀던 순간이나 대화는 무엇이었나요?",
+  "오늘 나를 가장 기분 좋게 미소 짓게 만든 작은 일은 무엇이었나요?",
+  "몸이나 마음이 조금 지쳤다면, 나 자신에게 건네고 싶은 한마디는?",
+  "오늘 새롭게 시도하거나 배우게 된 소소한 점이 있었나요?",
+  "오늘 사진 속 순간으로 다시 돌아간다면 어떤 말을 남기고 싶나요?"
+];
+
+// 성격 키워드 태그 목록
 const ALL_PERSONALITY_TAGS = ["열정적인", "사색적인", "긍정적인", "차분한", "유쾌한", "섬세한", "계획적인", "도전적인", "솔직한", "따뜻한"];
 
-// 스티커 프리셋 (이모지 36종 & 감성 레터링 24종)
+// 스티커 프리셋
 const STICKER_EMOJIS = [
   "✨", "💖", "🔥", "🌿", "⚾", "🎉", "☕", "💪", "🌈", "⭐", "🥑", "🏆",
   "🏃", "📚", "🎨", "🍕", "☀️", "🌙", "☁️", "🎵", "🍀", "🌸", "💡", "🎯",
@@ -133,15 +152,14 @@ const HOLIDAYS_2026 = {
   "10-03": "개천절", "10-05": "대체공휴일", "10-09": "한글날", "12-25": "성탄절"
 };
 
-// 런타임 제어 객체
+// 런타임 변수
 let pieChartInstance = null;
 let radarChartInstance = null;
 let vlogInterval = null;
 let currentRatingScore = 5;
-let signupRoleSelected = '교사';
 let viewedEntryDate = null;
 
-// 음성 녹음 런타임 상태
+// 음성 녹음 제어
 let mediaRecorder = null;
 let audioChunks = [];
 let voiceTimerInterval = null;
@@ -149,17 +167,27 @@ let voiceMaxSeconds = 15;
 let voiceCurrentSeconds = 0;
 let speechRecognitionInstance = null;
 
+// 드로잉 캔버스 런타임 제어
+let drawingCanvas = null;
+let drawingCtx = null;
+let currentDrawTool = 'pen'; // 'pen' | 'highlighter' | 'eraser'
+let currentDrawColor = '#0f172a';
+let isDrawingNow = false;
+let currentStroke = [];
+let lastPenTapTime = 0;
+
 // ========================================================
-// 2. 앱 초기 부트스트랩 (App Lifecycle)
+// 2. 앱 초기화 (Bootstrap & Lifecycle)
 // ========================================================
 window.addEventListener('DOMContentLoaded', () => {
   loadLocalStorage();
-  applyAppTheme(appState.currentTheme, false);
+  applyAppTheme(appState.persona.defaultTheme || appState.currentTheme, false);
   lucide.createIcons();
 
   initHeaderDate();
   updateUserSessionUI();
   initPersonaUI();
+  initDrawingCanvas();
   renderCalendar();
   renderPresetKeywords();
   renderRecentKeywords();
@@ -171,8 +199,9 @@ window.addEventListener('DOMContentLoaded', () => {
   updateNoticeBanner();
   updateStreakBadge();
   initEmotionCharts();
+  refreshInterviewQuestion();
 
-  // 기본 기록 일자 세팅
+  // 기본 기록 일자
   document.getElementById('entryDateInput').value = appState.draftEntry.date;
 
   // 메모 날짜 선택 연동 이벤트
@@ -188,6 +217,9 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // 화면 크기 변경 시 드로잉 캔버스 리사이즈 동기화
+  window.addEventListener('resize', resizeDrawingCanvas);
 });
 
 function initHeaderDate() {
@@ -208,7 +240,7 @@ function loadLocalStorage() {
     }
   }
 
-  // 기본 데모 다이어리 주입
+  // 초기 데모 데이터 보정
   if (!appState.entries || appState.entries.length === 0) {
     appState.entries = [
       {
@@ -233,7 +265,7 @@ function persistState() {
 }
 
 // ========================================================
-// 3. 테마 및 하단 가변 접이식 독 (Collapsible Dock)
+// 3. 테마 및 가변 하단 독 (Collapsible Dock)
 // ========================================================
 function applyAppTheme(themeName, shouldPersist = true) {
   const palette = THEME_PALETTES[themeName] || THEME_PALETTES.indigo;
@@ -282,7 +314,10 @@ function switchTab(tabId) {
     targetNav.classList.add('text-theme', 'active');
   }
 
-  if (tabId === 'calendar') renderCalendar();
+  if (tabId === 'calendar') {
+    renderCalendar();
+    setTimeout(resizeDrawingCanvas, 50);
+  }
   if (tabId === 'timeline') renderTimeline();
   if (tabId === 'report') setReportPeriod(appState.reportPeriod);
   if (tabId === 'planner') renderFilteredMemos();
@@ -291,9 +326,12 @@ function switchTab(tabId) {
 }
 
 // ========================================================
-// 4. 날짜 액션 시트 & 상세 뷰어 vs 기록 라우팅 분기
+// 4. 날짜 액션 시트 & 상세 뷰어 라우팅 (터치 버그 원천 해결)
 // ========================================================
 function selectCalendarDate(dateStr) {
+  // 드로잉 모드 중에는 날짜 팝업 차단
+  if (appState.isDrawingMode) return;
+
   appState.selectedDate = dateStr;
   document.getElementById('actionSheetDateTitle').textContent = dateStr;
 
@@ -340,18 +378,15 @@ function openDiaryViewer(entry) {
   document.getElementById('viewerFeedbackBadge').textContent = entry.feedback || '행복한 여운 🥰';
   document.getElementById('viewerDiaryText').textContent = entry.diary;
 
-  // 미디어
   const mediaContainer = document.getElementById('viewerMediaContainer');
   mediaContainer.innerHTML = '';
   if (entry.mediaList && entry.mediaList.length > 0) {
     mediaContainer.innerHTML = renderWideMediaHtml(entry.mediaList);
   }
 
-  // 키워드
   const kwContainer = document.getElementById('viewerKeywordsContainer');
   kwContainer.innerHTML = (entry.keywords || []).map(k => `<span class="bg-theme-light text-theme text-[10px] font-black px-2 py-0.5 rounded-full border border-theme-light">${k}</span>`).join(' ');
 
-  // 코멘트
   const commentBox = document.getElementById('viewerUserCommentBox');
   const commentText = document.getElementById('viewerUserCommentText');
   if (entry.userComment) {
@@ -413,10 +448,12 @@ function resetDraftBuffer(dateStr) {
     userComment: '',
     voiceAudio: null,
     voiceTranscript: '',
-    voiceDuration: 0
+    voiceDuration: 0,
+    interviewAnswer: ''
   };
   document.getElementById('diaryResultCard').classList.add('hidden');
   document.getElementById('finalUserCommentInput').value = '';
+  document.getElementById('aiInterviewAnswerInput').value = '';
   clearDraftAudio();
   renderWideMediaView();
 }
@@ -451,7 +488,7 @@ function handleActionSheetMemo() {
 }
 
 // ========================================================
-// 5. 캘린더 엔진 (공휴일·토·일 & 인디케이터 도트 표시)
+// 5. 캘린더 렌더링 & 요일/공휴일/인디케이터 시스템
 // ========================================================
 function setCalendarMode(mode) {
   appState.calendarMode = mode;
@@ -539,13 +576,13 @@ function renderCalendar() {
       cell.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.25), rgba(0,0,0,0.65)), url('${thumbUrl}')`;
     }
 
+    // 🌟 달력 날짜 셀 터치 이벤트 (스티커 캔버스가 가로채지 않음)
     cell.onclick = () => selectCalendarDate(item.fullDate);
 
-    // 복합 인디케이터 도트 (일정 녹색 도트, 메모 주황 도트)
     const indicatorsHtml = `
       <div class="flex items-center space-x-0.5">
-        ${item.hasSchedules ? `<span class="cell-indicator-dot bg-emerald-500" title="일정 있음"></span>` : ''}
-        ${item.hasMemos ? `<span class="cell-indicator-dot bg-amber-400" title="메모 있음"></span>` : ''}
+        ${item.hasSchedules ? `<span class="cell-indicator-dot bg-emerald-500" title="일정"></span>` : ''}
+        ${item.hasMemos ? `<span class="cell-indicator-dot bg-amber-400" title="메모"></span>` : ''}
       </div>
     `;
 
@@ -564,6 +601,7 @@ function renderCalendar() {
   });
 
   renderCanvasStickers();
+  redrawAllDrawingStrokes();
   updateStreakBadge();
 }
 
@@ -589,7 +627,214 @@ function checkPastMemories() {
 }
 
 // ========================================================
-// 6. 스티커 스튜디오 & 손가락 가림 방지 플로팅 돋보기(Loupe)
+// 6. 스타일러스(애플펜슬 / S펜) 드로잉 엔진 & 더블탭 제스처
+// ========================================================
+function initDrawingCanvas() {
+  drawingCanvas = document.getElementById('drawingCanvas');
+  if (!drawingCanvas) return;
+  drawingCtx = drawingCanvas.getContext('2d');
+
+  resizeDrawingCanvas();
+
+  // Pointer Events API (필압 및 애플펜슬 최적화)
+  drawingCanvas.addEventListener('pointerdown', handleDrawingPointerDown);
+  drawingCanvas.addEventListener('pointermove', handleDrawingPointerMove);
+  drawingCanvas.addEventListener('pointerup', handleDrawingPointerUp);
+  drawingCanvas.addEventListener('pointercancel', handleDrawingPointerUp);
+}
+
+function resizeDrawingCanvas() {
+  if (!drawingCanvas) return;
+  const wrapper = document.getElementById('calendarWrapper');
+  if (!wrapper) return;
+
+  const rect = wrapper.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+
+  drawingCanvas.width = rect.width * dpr;
+  drawingCanvas.height = rect.height * dpr;
+  drawingCanvas.style.width = `${rect.width}px`;
+  drawingCanvas.style.height = `${rect.height}px`;
+
+  if (drawingCtx) {
+    drawingCtx.scale(dpr, dpr);
+    redrawAllDrawingStrokes();
+  }
+}
+
+function toggleDrawingMode() {
+  appState.isDrawingMode = !appState.isDrawingMode;
+  const canvas = document.getElementById('drawingCanvas');
+  const toolbar = document.getElementById('drawingToolbar');
+  const btn = document.getElementById('btnToggleDrawMode');
+
+  if (appState.isDrawingMode) {
+    canvas.classList.add('drawing-active');
+    toolbar.classList.remove('hidden-toolbar');
+    btn.classList.add('bg-theme', 'text-white');
+    showToast("✏️ 펜슬 필기 모드가 켜졌습니다. 달력 위에 자유롭게 필기하세요.");
+  } else {
+    canvas.classList.remove('drawing-active');
+    toolbar.classList.add('hidden-toolbar');
+    btn.classList.remove('bg-theme', 'text-white');
+    persistState();
+  }
+}
+
+function toggleDrawingVisibility() {
+  appState.isDrawingVisible = !appState.isDrawingVisible;
+  const canvas = document.getElementById('drawingCanvas');
+  const icon = document.getElementById('iconDrawVis');
+
+  if (appState.isDrawingVisible) {
+    canvas.style.display = 'block';
+    icon.setAttribute('data-lucide', 'eye');
+    showToast("손글씨 레이어를 표시합니다.");
+  } else {
+    canvas.style.display = 'none';
+    icon.setAttribute('data-lucide', 'eye-off');
+    showToast("손글씨 레이어를 숨깁니다.");
+  }
+  lucide.createIcons();
+}
+
+function setDrawingTool(tool) {
+  currentDrawTool = tool;
+  ['pen', 'highlighter', 'eraser'].forEach(t => {
+    const btn = document.getElementById(`btnTool${t.charAt(0).toUpperCase() + t.slice(1)}`);
+    if (t === tool) btn.classList.add('active');
+    else btn.classList.remove('active');
+  });
+}
+
+function setDrawingColor(color, dotElem) {
+  currentDrawColor = color;
+  document.querySelectorAll('#drawingPaletteColors .palette-color-dot').forEach(d => d.classList.remove('active'));
+  if (dotElem) dotElem.classList.add('active');
+  if (currentDrawTool === 'eraser') setDrawingTool('pen');
+}
+
+function handleDrawingPointerDown(e) {
+  if (!appState.isDrawingMode) return;
+
+  // 🌟 애플펜슬 2세대 더블 탭 제스처 감지 (250ms 이내 연속 탭 시 펜 ↔ 지우개 전환)
+  const now = Date.now();
+  if (now - lastPenTapTime < 250) {
+    setDrawingTool(currentDrawTool === 'eraser' ? 'pen' : 'eraser');
+    showToast(`도구 전환: [${currentDrawTool === 'eraser' ? '지우개' : '펜'}]`);
+    lastPenTapTime = 0;
+    return;
+  }
+  lastPenTapTime = now;
+
+  drawingCanvas.setPointerCapture(e.pointerId);
+  isDrawingNow = true;
+
+  const rect = drawingCanvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const pressure = (e.pressure && e.pressure > 0) ? e.pressure : 0.5;
+
+  currentStroke = [{ x, y, pressure }];
+}
+
+function handleDrawingPointerMove(e) {
+  if (!isDrawingNow || !appState.isDrawingMode) return;
+
+  const rect = drawingCanvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const pressure = (e.pressure && e.pressure > 0) ? e.pressure : 0.5;
+
+  const prev = currentStroke[currentStroke.length - 1];
+  currentStroke.push({ x, y, pressure });
+
+  renderStrokeSegment(prev, { x, y, pressure }, currentDrawTool, currentDrawColor);
+}
+
+function handleDrawingPointerUp(e) {
+  if (!isDrawingNow) return;
+  isDrawingNow = false;
+
+  if (currentStroke.length > 0) {
+    const ym = `${appState.calendarYear}-${String(appState.calendarMonth+1).padStart(2,'0')}`;
+    if (!appState.drawings[ym]) appState.drawings[ym] = [];
+    appState.drawings[ym].push({
+      tool: currentDrawTool,
+      color: currentDrawColor,
+      points: currentStroke
+    });
+    persistState();
+  }
+  currentStroke = [];
+}
+
+function renderStrokeSegment(p1, p2, tool, color) {
+  if (!drawingCtx) return;
+  drawingCtx.beginPath();
+  drawingCtx.moveTo(p1.x, p1.y);
+  drawingCtx.lineTo(p2.x, p2.y);
+  drawingCtx.lineCap = 'round';
+  drawingCtx.lineJoin = 'round';
+
+  const baseWidth = (tool === 'highlighter') ? 14 : (tool === 'eraser' ? 18 : 2.5);
+  drawingCtx.lineWidth = baseWidth * (p2.pressure || 0.5) * 1.5;
+
+  if (tool === 'eraser') {
+    drawingCtx.globalCompositeOperation = 'destination-out';
+    drawingCtx.strokeStyle = 'rgba(0,0,0,1)';
+  } else if (tool === 'highlighter') {
+    drawingCtx.globalCompositeOperation = 'source-over';
+    drawingCtx.strokeStyle = color;
+    drawingCtx.globalAlpha = 0.35;
+  } else {
+    drawingCtx.globalCompositeOperation = 'source-over';
+    drawingCtx.strokeStyle = color;
+    drawingCtx.globalAlpha = 1.0;
+  }
+
+  drawingCtx.stroke();
+  drawingCtx.globalAlpha = 1.0;
+  drawingCtx.globalCompositeOperation = 'source-over';
+}
+
+function redrawAllDrawingStrokes() {
+  if (!drawingCtx || !drawingCanvas) return;
+  const rect = drawingCanvas.getBoundingClientRect();
+  drawingCtx.clearRect(0, 0, rect.width, rect.height);
+
+  const ym = `${appState.calendarYear}-${String(appState.calendarMonth+1).padStart(2,'0')}`;
+  const strokes = appState.drawings[ym] || [];
+
+  strokes.forEach(stroke => {
+    for (let i = 1; i < stroke.points.length; i++) {
+      renderStrokeSegment(stroke.points[i - 1], stroke.points[i], stroke.tool, stroke.color);
+    }
+  });
+}
+
+function undoDrawingStroke() {
+  const ym = `${appState.calendarYear}-${String(appState.calendarMonth+1).padStart(2,'0')}`;
+  if (appState.drawings[ym] && appState.drawings[ym].length > 0) {
+    appState.drawings[ym].pop();
+    persistState();
+    redrawAllDrawingStrokes();
+    showToast("한 획 되돌리기 완료");
+  }
+}
+
+function clearAllDrawingStrokes() {
+  if (confirm("현재 달의 모든 손글씨 필기를 지우시겠습니까?")) {
+    const ym = `${appState.calendarYear}-${String(appState.calendarMonth+1).padStart(2,'0')}`;
+    appState.drawings[ym] = [];
+    persistState();
+    redrawAllDrawingStrokes();
+    showToast("손글씨 필기가 모두 지워졌습니다.");
+  }
+}
+
+// ========================================================
+// 7. 스티커 스튜디오 & 2단계 플로팅 돋보기(Loupe)
 // ========================================================
 function openStickerStudioModal() {
   document.getElementById('stickerStudioModal').classList.remove('hidden');
@@ -614,18 +859,16 @@ function switchStickerSubTab(tab) {
 }
 
 function renderStickerStudioPresets() {
-  // 이모지
   const emojiPanel = document.getElementById('stickerPanelEmoji');
   emojiPanel.innerHTML = '';
   STICKER_EMOJIS.forEach(emoji => {
     const btn = document.createElement('button');
-    btn.className = "p-2 rounded-xl hover:bg-slate-100 transition active:scale-90";
+    btn.className = "p-2 rounded-xl hover:bg-slate-100 transition active:scale-90 text-2xl";
     btn.textContent = emoji;
     btn.onclick = () => attachStickerToCanvas(emoji, 'emoji');
     emojiPanel.appendChild(btn);
   });
 
-  // 레터링
   const letteringPanel = document.getElementById('stickerPanelLettering');
   letteringPanel.innerHTML = '';
   STICKER_LETTERINGS.forEach(txt => {
@@ -667,7 +910,7 @@ function attachStickerToCanvas(text, type, options = {}) {
   appState.stickers.push(newSticker);
   persistState();
   renderCanvasStickers();
-  showToast("달력 위에 스티커가 놓였습니다. 핀치로 크기/각도를 조절하세요!");
+  showToast("스티커가 놓였습니다. 핀치로 크기/각도를 조절하세요!");
 }
 
 function renderCanvasStickers() {
@@ -685,9 +928,9 @@ function renderCanvasStickers() {
     el.style.color = st.color;
 
     if (st.hasBg) {
-      el.style.backgroundColor = "rgba(255, 255, 255, 0.9)";
+      el.style.backgroundColor = "rgba(255, 255, 255, 0.92)";
       el.style.borderRadius = "8px";
-      el.style.boxShadow = "0 1px 4px rgba(0,0,0,0.1)";
+      el.style.boxShadow = "0 1px 4px rgba(0,0,0,0.12)";
     }
 
     el.textContent = st.sticker;
@@ -696,7 +939,6 @@ function renderCanvasStickers() {
   });
 }
 
-// 🌟 손가락 가림 방지 플로팅 경계선 돋보기 (Boundary Loupe) 결합 터치 제스처
 function bindStickerTouchWithLoupe(element, stickerData) {
   const loupe = document.getElementById('stickerLoupe');
   const loupeContent = document.getElementById('stickerLoupeContent');
@@ -705,62 +947,35 @@ function bindStickerTouchWithLoupe(element, stickerData) {
   let initialAngle = 0;
   let startX = 0, startY = 0;
 
-  element.addEventListener('touchstart', (e) => {
+  element.addEventListener('pointerdown', (e) => {
+    element.setPointerCapture(e.pointerId);
     loupeContent.textContent = stickerData.sticker;
     loupeContent.style.fontFamily = stickerData.font;
     loupeContent.style.color = stickerData.color;
     loupe.style.display = 'block';
 
-    const touch = e.touches[0];
-    updateLoupePosition(touch.clientX, touch.clientY);
+    updateLoupePosition(e.clientX, e.clientY);
+    startX = e.clientX - stickerData.x;
+    startY = e.clientY - stickerData.y;
+  });
 
-    if (e.touches.length === 1) {
-      startX = touch.clientX - stickerData.x;
-      startY = touch.clientY - stickerData.y;
-    } else if (e.touches.length === 2) {
-      initialDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      initialAngle = Math.atan2(
-        e.touches[1].clientY - e.touches[0].clientY,
-        e.touches[1].clientX - e.touches[0].clientX
-      ) * 180 / Math.PI;
-    }
-  }, { passive: true });
+  element.addEventListener('pointermove', (e) => {
+    if (!element.hasPointerCapture(e.pointerId)) return;
 
-  element.addEventListener('touchmove', (e) => {
-    const touch = e.touches[0];
-    updateLoupePosition(touch.clientX, touch.clientY);
+    updateLoupePosition(e.clientX, e.clientY);
+    stickerData.x = e.clientX - startX;
+    stickerData.y = e.clientY - startY;
 
-    if (e.touches.length === 1) {
-      stickerData.x = touch.clientX - startX;
-      stickerData.y = touch.clientY - startY;
-      element.style.left = `${stickerData.x}px`;
-      element.style.top = `${stickerData.y}px`;
-    } else if (e.touches.length === 2) {
-      const currentDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const currentAngle = Math.atan2(
-        e.touches[1].clientY - e.touches[0].clientY,
-        e.touches[1].clientX - e.touches[0].clientX
-      ) * 180 / Math.PI;
+    element.style.left = `${stickerData.x}px`;
+    element.style.top = `${stickerData.y}px`;
+  });
 
-      const scaleChange = currentDist / initialDist;
-      stickerData.scale = Math.max(0.6, Math.min(3.5, stickerData.scale * scaleChange));
-      stickerData.rotation += (currentAngle - initialAngle);
-
-      element.style.transform = `scale(${stickerData.scale}) rotate(${stickerData.rotation}deg)`;
-      initialDist = currentDist;
-      initialAngle = currentAngle;
-    }
-  }, { passive: true });
-
-  element.addEventListener('touchend', () => {
+  element.addEventListener('pointerup', (e) => {
     loupe.style.display = 'none';
     persistState();
+  });
+  element.addEventListener('pointercancel', (e) => {
+    loupe.style.display = 'none';
   });
 }
 
@@ -771,7 +986,7 @@ function updateLoupePosition(x, y) {
 }
 
 // ========================================================
-// 7. 통합 미디어 & 와이드 풀필(Full-Fill) 레이아웃
+// 8. 통합 미디어 바텀시트 & 와이드 풀필 뷰포트
 // ========================================================
 function openMediaBottomSheet() {
   if (appState.draftEntry.mediaList.length >= 3) {
@@ -928,7 +1143,7 @@ function closeLightbox() {
 }
 
 // ========================================================
-// 8. 음성 메모 일기 믹스 (Voice-to-Diary) 엔진
+// 9. 음성 메모 녹음 (Voice-to-Diary)
 // ========================================================
 function openVoiceRecordModal() {
   document.getElementById('voiceRecordModal').classList.remove('hidden');
@@ -985,8 +1200,6 @@ async function startVoiceRecordingSession() {
     };
 
     mediaRecorder.start();
-
-    // Web Speech API 전사 시작
     initLiveSpeechRecognition();
 
     const btn = document.getElementById('recordTriggerBtn');
@@ -1046,7 +1259,6 @@ function confirmVoiceRecording() {
   appState.draftEntry.voiceTranscript = transcript;
   closeVoiceRecordModal();
 
-  // 레코드 탭 UI 반영
   document.getElementById('voiceStatusBadge').textContent = `녹음완료 (${appState.draftEntry.voiceDuration}초)`;
   document.getElementById('voiceStatusBadge').className = "text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200";
   document.getElementById('voiceDurationDisplay').textContent = `00:${String(appState.draftEntry.voiceDuration).padStart(2, '0')}`;
@@ -1058,7 +1270,7 @@ function confirmVoiceRecording() {
     area.classList.remove('hidden');
   }
 
-  showToast("음성 메모가 오늘의 기록 버퍼에 합성 준비되었습니다.");
+  showToast("음성 메모가 일기 버퍼에 결합되었습니다.");
 }
 
 function playDraftAudio() {
@@ -1084,73 +1296,22 @@ function clearDraftAudio() {
 }
 
 // ========================================================
-// 9. 마이 페르소나 (회원 정보) & 동적 AI 일기 프롬프트 바인딩
+// 10. AI 인터뷰어 질문 & 동적 페르소나 일기 생성
 // ========================================================
-function initPersonaUI() {
-  const p = appState.persona;
-  document.getElementById('personaJob').value = p.job || '';
-  document.getElementById('personaMbti').value = p.mbti || 'ENFP';
-  document.getElementById('personaPin').value = p.pin || '';
-  document.getElementById('personaThemeSelect').value = p.defaultTheme || 'indigo';
-
-  const toneRadios = document.querySelectorAll('input[name="personaTone"]');
-  toneRadios.forEach(r => {
-    if (r.value === p.tone) r.checked = true;
-  });
-
-  renderPersonalityChips();
+function refreshInterviewQuestion() {
+  const qEl = document.getElementById('aiInterviewQuestionText');
+  if (!qEl) return;
+  const randomQ = INTERVIEW_QUESTIONS[Math.floor(Math.random() * INTERVIEW_QUESTIONS.length)];
+  qEl.textContent = `"${randomQ}"`;
 }
 
-function renderPersonalityChips() {
-  const container = document.getElementById('personaPersonalityChips');
-  container.innerHTML = '';
-  ALL_PERSONALITY_TAGS.forEach(tag => {
-    const isSelected = appState.persona.personality.includes(tag);
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = `px-2.5 py-1 rounded-xl text-xs font-bold border transition ${isSelected ? 'bg-theme text-white border-theme' : 'bg-slate-50 text-slate-600 border-slate-200'}`;
-    chip.textContent = `#${tag}`;
-    chip.onclick = () => togglePersonalityTag(tag);
-    container.appendChild(chip);
-  });
-}
-
-function togglePersonalityTag(tag) {
-  const list = appState.persona.personality;
-  const idx = list.indexOf(tag);
-  if (idx > -1) {
-    list.splice(idx, 1);
-  } else {
-    if (list.length >= 3) return showToast("성격 키워드는 최대 3개까지만 선택 가능합니다.");
-    list.push(tag);
-  }
-  renderPersonalityChips();
-}
-
-function handleSavePersona(e) {
-  e.preventDefault();
-  const job = document.getElementById('personaJob').value.trim();
-  const mbti = document.getElementById('personaMbti').value;
-  const pin = document.getElementById('personaPin').value.trim();
-  const theme = document.getElementById('personaThemeSelect').value;
-  const toneRadio = document.querySelector('input[name="personaTone"]:checked');
-
-  appState.persona.job = job || "일반";
-  appState.persona.mbti = mbti;
-  appState.persona.pin = pin || "0724";
-  appState.persona.defaultTheme = theme;
-  appState.persona.tone = toneRadio ? toneRadio.value : "수필형";
-
-  persistState();
-  applyAppTheme(theme);
-  showToast("마이 페르소나 설정이 안전하게 저장되었습니다.");
-}
-
-// 🌟 Gemini AI 일기 생성 요청 (동적 페르소나 주입 & 키워드 나열 배제)
 async function requestAIDiaryGeneration() {
   const { mediaList, keywords, voiceTranscript } = appState.draftEntry;
-  if (mediaList.length === 0 && keywords.length === 0 && !voiceTranscript) {
-    return showToast("사진, 키워드, 음성 메모 중 최소 하나를 입력해 주세요.");
+  const interviewAnswer = document.getElementById('aiInterviewAnswerInput').value.trim();
+  appState.draftEntry.interviewAnswer = interviewAnswer;
+
+  if (mediaList.length === 0 && keywords.length === 0 && !voiceTranscript && !interviewAnswer) {
+    return showToast("사진, 키워드, 음성 메모, 또는 인터뷰 답변 중 최소 하나를 입력해 주세요.");
   }
 
   const btn = document.getElementById('btnGenerateAI');
@@ -1158,18 +1319,40 @@ async function requestAIDiaryGeneration() {
   btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin text-amber-300"></i><span>페르소나에 맞춰 감정을 정갈하게 엮는 중...</span>`;
   lucide.createIcons();
 
-  // 구글 앱스 스크립트 API 호출 (URL 입력 시)
+  // 동적 프롬프트 구조화
+  const dynamicSystemInstruction = `[System Instruction]
+당신은 사용자의 내면을 가장 깊이 이해하는 전속 에세이스트 AI입니다.
+아래의 [사용자 페르소나]를 심층 분석하여, 마치 사용자가 자신의 일기장에 직접 쓴 것 같은 완벽한 일체감의 1인칭 수필형 일기(3~4문장)를 작성하세요.
+
+[사용자 페르소나 Profile]
+- 직업 / 환경: ${appState.persona.job || '일상 탐구자'}
+- MBTI 및 성격: ${appState.persona.mbti || 'ENFP'}, ${(appState.persona.personality || []).join(', ') || '사색적'}
+- 선호 문체 스타일: ${appState.persona.tone || '담담한 수필형'}
+
+[입력 정보]
+- 키워드: ${keywords.join(', ')}
+${voiceTranscript ? `- 음성 메모 전사: "${voiceTranscript}"` : ''}
+${interviewAnswer ? `- 오늘의 질문 답변: "${interviewAnswer}"` : ''}
+
+[작성 절대 원칙]
+1. 키워드 단어를 기계적으로 본문에 나열하거나 열거하지 마십시오.
+2. 직업적 시선과 MBTI 감성, 지정된 문체가 자연스럽게 배어나오도록 1인칭 독백체로 완성하십시오.`;
+
+  // 구글 앱스 스크립트 API 호출
   if (GAS_API_URL && !GAS_API_URL.includes("여기에")) {
     try {
       const payload = {
         action: "GENERATE_AND_SAVE",
         userEmail: appState.currentUser ? appState.currentUser.email : "guest",
         persona: appState.persona,
+        prompt: dynamicSystemInstruction,
         photos: mediaList.map(m => m.src),
         keywords: keywords,
         voiceText: voiceTranscript,
+        interviewAnswer: interviewAnswer,
         date: appState.draftEntry.date
       };
+
       const res = await fetch(GAS_API_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
@@ -1181,28 +1364,27 @@ async function requestAIDiaryGeneration() {
         return;
       }
     } catch (e) {
-      console.warn("GAS 통신 예외, 로컬 고감도 자연어 엔진으로 대체합니다.", e);
+      console.warn("GAS 통신 예외, 로컬 자연어 엔진으로 대체합니다.", e);
     }
   }
 
-  // 로컬 고감도 개인화 자연어 엔진 시뮬레이션
+  // 로컬 고감도 자연어 시뮬레이션
   setTimeout(() => {
-    const { job, mbti, tone } = appState.persona;
+    const { tone } = appState.persona;
     let personaReflect = "";
 
     if (tone === "공감형") {
-      personaReflect = `누구보다 열심히 달린 나 자신을 따스하게 다독여 주고 싶은 하루였다. 비록 몸은 노곤할지라도 소중한 사람들과 나누었던 눈인사와 격려 덕분에 마음의 온도가 은은하게 올라간다.`;
+      personaReflect = `누구보다 치열하게 하루를 보낸 나 자신에게 따스한 온기를 건네고 싶다. 비록 고단함이 밀려올지라도 곁에 머문 사람들과 나눈 미소 덕분에 마음의 결이 한층 포근해진다.`;
     } else if (tone === "성장형") {
-      personaReflect = `땀 흘리고 몰입하며 나의 한계를 조금씩 넓혀간 값진 시간이었다. 일상의 소소한 순간들 속에서도 배움과 단단한 성장의 씨앗을 발견하며, 내일을 살아갈 힘찬 에너지를 채운다.`;
+      personaReflect = `땀 흘리고 부딪히며 나의 가능성을 또 한 뼘 넓혀낸 시간이었다. 소소한 순간들 속에서도 배움과 단단한 성장의 씨앗을 발견하며, 내일을 시작할 굳건한 에너지를 차곡차곡 채운다.`;
     } else if (tone === "일상형") {
-      personaReflect = `오늘 하루도 별 탈 없이 기분 좋게 마무리했다. 시원한 가을바람을 맞으며 맛있는 음식을 먹고 나니 고단했던 피로가 단숨에 녹아내린다. 이런 소소함이 참 좋다.`;
+      personaReflect = `오늘 하루도 큰 탈 없이 평온하게 지나갔다. 상쾌한 바람을 맞으며 좋아하는 풍경을 바라보고 나니 쌓였던 피로가 단숨에 사르르 녹아내린다. 이런 소소함이야말로 삶의 쉼표다.`;
     } else {
-      // 담담한 수필형
-      personaReflect = `지나온 분주함을 잠시 내려놓고 온전히 내 호흡에 귀를 기울였다. 거창한 수식 없이도 눈앞에 머무는 따스한 풍경들이 내면을 잔잔하게 채워준다. 소리 없이 단단해지는 저녁이다.`;
+      personaReflect = `소란했던 세상의 속도를 잠시 늦추고 온전히 내 호흡에 귀를 기울였다. 거창한 말 대신 눈앞에 닿는 빛과 공기 속에 온기가 머물며, 조용하지만 단단한 위로가 마음에 차오른다.`;
     }
 
-    if (voiceTranscript) {
-      personaReflect += ` "${voiceTranscript.slice(0, 30)}..."라고 나직이 읊조렸던 순간의 진심이 마음에 긴 여운으로 남는다.`;
+    if (interviewAnswer) {
+      personaReflect += ` 문득 마음에 남았던 "${interviewAnswer}"라는 생각처럼, 진심이 깃든 순간들은 오래도록 지워지지 않을 것이다.`;
     }
 
     showGeneratedDiary(personaReflect);
@@ -1248,7 +1430,8 @@ function commitEntryToCloud() {
     userComment: comment,
     voiceAudio: appState.draftEntry.voiceAudio,
     voiceTranscript: appState.draftEntry.voiceTranscript,
-    voiceDuration: appState.draftEntry.voiceDuration
+    voiceDuration: appState.draftEntry.voiceDuration,
+    interviewAnswer: appState.draftEntry.interviewAnswer
   };
 
   const existIdx = appState.entries.findIndex(e => e.date === fullDate);
@@ -1265,20 +1448,238 @@ function commitEntryToCloud() {
 }
 
 // ========================================================
-// 10. 월간 마인드로그 매거진 (A4 인쇄/PDF 조판)
+// 11. 회원 인증 & 계정 찾기 & 마이페이지
+// ========================================================
+function handleHeaderUserClick() {
+  if (appState.currentUser) {
+    openMyPageModal();
+  } else {
+    openAuthModal();
+  }
+}
+
+function openAuthModal() { document.getElementById('authModal').classList.remove('hidden'); }
+function closeAuthModal() { document.getElementById('authModal').classList.add('hidden'); }
+
+function switchAuthTab(type) {
+  ['login', 'signup', 'find'].forEach(t => {
+    const btn = document.getElementById(`authTab${t.charAt(0).toUpperCase() + t.slice(1)}`);
+    const form = document.getElementById(`${t}Form`);
+    if (t === type) {
+      btn.className = "flex-1 py-1.5 rounded-lg bg-white text-theme shadow-2xs font-extrabold";
+      form.classList.remove('hidden');
+    } else {
+      btn.className = "flex-1 py-1.5 rounded-lg font-bold text-slate-500";
+      form.classList.add('hidden');
+    }
+  });
+}
+
+function checkSignupPwMatch() {
+  const pw = document.getElementById('signupPw').value;
+  const confirm = document.getElementById('signupPwConfirm').value;
+  const msg = document.getElementById('signupPwMatchMsg');
+
+  if (!confirm) {
+    msg.classList.add('hidden');
+    return;
+  }
+  msg.classList.remove('hidden');
+  if (pw === confirm) {
+    msg.textContent = "비밀번호가 일치합니다.";
+    msg.className = "text-[10px] font-bold text-emerald-600 mt-0.5 block";
+  } else {
+    msg.textContent = "비밀번호가 일치하지 않습니다.";
+    msg.className = "text-[10px] font-bold text-rose-600 mt-0.5 block";
+  }
+}
+
+function handleSignupSubmit(e) {
+  e.preventDefault();
+  const email = document.getElementById('signupEmail').value.trim();
+  const pw = document.getElementById('signupPw').value.trim();
+  const confirm = document.getElementById('signupPwConfirm').value.trim();
+  const birth = document.getElementById('signupBirth').value;
+  const name = document.getElementById('signupName').value.trim();
+  const phone = document.getElementById('signupPhone').value.trim();
+
+  if (pw !== confirm) return showToast("비밀번호 확인이 일치하지 않습니다.");
+
+  appState.currentUser = { email, birth, name: name || "회원", phone };
+  persistState();
+  updateUserSessionUI();
+  closeAuthModal();
+  showToast(`환영합니다! 회원가입이 완료되었습니다.`);
+}
+
+function handleLoginSubmit(e) {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  appState.currentUser = { email, birth: "", name: "회원", phone: "" };
+  appState.autoLogin = document.getElementById('autoLoginCheck').checked;
+
+  persistState();
+  updateUserSessionUI();
+  closeAuthModal();
+  showToast("로그인되었습니다.");
+}
+
+function updateUserSessionUI() {
+  const badge = document.getElementById('headerUserBadge');
+  if (appState.currentUser) {
+    badge.textContent = `${appState.currentUser.name || appState.currentUser.email.split('@')[0]} 님`;
+  } else {
+    badge.textContent = "로그인 필요";
+  }
+}
+
+// 계정 찾기 서브 탭
+function switchFindSubTab(sub) {
+  const tabId = document.getElementById('tabFindId');
+  const tabPw = document.getElementById('tabFindPw');
+  const panelId = document.getElementById('panelFindId');
+  const panelPw = document.getElementById('panelFindPw');
+
+  if (sub === 'id') {
+    tabId.className = "flex-1 py-1.5 border-b-2 border-theme text-theme font-bold";
+    tabPw.className = "flex-1 py-1.5 border-b-2 border-transparent text-slate-400 font-bold";
+    panelId.classList.remove('hidden');
+    panelPw.classList.add('hidden');
+  } else {
+    tabPw.className = "flex-1 py-1.5 border-b-2 border-theme text-theme font-bold";
+    tabId.className = "flex-1 py-1.5 border-b-2 border-transparent text-slate-400 font-bold";
+    panelPw.classList.remove('hidden');
+    panelId.classList.add('hidden');
+  }
+}
+
+function executeFindId() {
+  const name = document.getElementById('findIdName').value.trim();
+  const birth = document.getElementById('findIdBirth').value;
+  const resultBox = document.getElementById('findIdResultBox');
+
+  if (!name || !birth) return showToast("이름과 생년월일을 입력해 주세요.");
+
+  // 계정 조회 (마스킹 안내)
+  const masked = `${name.slice(0, 1)}**@gmail.com`;
+  resultBox.textContent = `회원님의 아이디는 [ ${masked} ] 입니다.`;
+  resultBox.classList.remove('hidden');
+}
+
+function executeFindAndResetPw() {
+  const email = document.getElementById('findPwEmail').value.trim();
+  const birth = document.getElementById('findPwBirth').value;
+  const newSection = document.getElementById('newPwSection');
+  const btn = document.getElementById('btnFindPwSubmit');
+
+  if (newSection.classList.contains('hidden')) {
+    if (!email || !birth) return showToast("이메일과 생년월일을 입력해 주세요.");
+    newSection.classList.remove('hidden');
+    btn.textContent = "비밀번호 변경 완료";
+    showToast("본인 인증 완료! 새 비밀번호를 입력해 주세요.");
+  } else {
+    const newPw = document.getElementById('resetNewPw').value.trim();
+    if (!newPw) return showToast("새 비밀번호를 입력해 주세요.");
+    showToast("비밀번호가 성공적으로 재설정되었습니다! 다시 로그인해 주세요.");
+    switchAuthTab('login');
+  }
+}
+
+// 👤 [내 정보 관리 (마이페이지)]
+function openMyPageModal() {
+  if (!appState.currentUser) return openAuthModal();
+  document.getElementById('myPageEmailDisplay').textContent = appState.currentUser.email;
+  initPersonaUI();
+  document.getElementById('myPageModal').classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function closeMyPageModal() { document.getElementById('myPageModal').classList.add('hidden'); }
+
+function initPersonaUI() {
+  const p = appState.persona;
+  document.getElementById('personaJob').value = p.job || '';
+  document.getElementById('personaMbti').value = p.mbti || 'ENFP';
+  document.getElementById('personaPin').value = p.pin || '';
+  document.getElementById('personaThemeSelect').value = p.defaultTheme || 'indigo';
+
+  const toneRadios = document.querySelectorAll('input[name="personaTone"]');
+  toneRadios.forEach(r => {
+    if (r.value === p.tone) r.checked = true;
+  });
+
+  renderPersonalityChips();
+}
+
+function renderPersonalityChips() {
+  const container = document.getElementById('personaPersonalityChips');
+  if (!container) return;
+  container.innerHTML = '';
+  ALL_PERSONALITY_TAGS.forEach(tag => {
+    const isSelected = appState.persona.personality.includes(tag);
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `px-2.5 py-1 rounded-xl text-xs font-bold border transition ${isSelected ? 'bg-theme text-white border-theme' : 'bg-slate-50 text-slate-600 border-slate-200'}`;
+    chip.textContent = `#${tag}`;
+    chip.onclick = () => togglePersonalityTag(tag);
+    container.appendChild(chip);
+  });
+}
+
+function togglePersonalityTag(tag) {
+  const list = appState.persona.personality;
+  const idx = list.indexOf(tag);
+  if (idx > -1) {
+    list.splice(idx, 1);
+  } else {
+    if (list.length >= 3) return showToast("성격 키워드는 최대 3개까지만 선택 가능합니다.");
+    list.push(tag);
+  }
+  renderPersonalityChips();
+}
+
+function handleSavePersona(e) {
+  e.preventDefault();
+  const job = document.getElementById('personaJob').value.trim();
+  const mbti = document.getElementById('personaMbti').value;
+  const pin = document.getElementById('personaPin').value.trim();
+  const theme = document.getElementById('personaThemeSelect').value;
+  const toneRadio = document.querySelector('input[name="personaTone"]:checked');
+
+  appState.persona.job = job || "일상 탐구자";
+  appState.persona.mbti = mbti;
+  appState.persona.pin = pin || "0724";
+  appState.persona.defaultTheme = theme;
+  appState.persona.tone = toneRadio ? toneRadio.value : "수필형";
+
+  persistState();
+  applyAppTheme(theme);
+  closeMyPageModal();
+  showToast("내 정보 및 마이 페르소나 설정이 안전하게 저장되었습니다.");
+}
+
+function logoutCurrentUser() {
+  if (confirm("로그아웃 하시겠습니까?")) {
+    appState.currentUser = null;
+    persistState();
+    updateUserSessionUI();
+    closeMyPageModal();
+    showToast("로그아웃되었습니다.");
+  }
+}
+
+// ========================================================
+// 12. 월간 매거진, 다차원 메모, 플래너, 타임라인, 관리자
 // ========================================================
 function openMagazineModal() {
   const validEntries = appState.entries.filter(e => e.mediaList && e.mediaList.length > 0);
   if (validEntries.length === 0) return showToast("매거진으로 조판할 사진 기록이 없습니다.");
 
   document.getElementById('magMonthDisplay').textContent = `${appState.calendarYear}. ${String(appState.calendarMonth + 1).padStart(2, '0')}`;
-  document.getElementById('magOwnerName').textContent = `${appState.currentUser ? appState.currentUser.email.split('@')[0] : '회원'} 님`;
+  document.getElementById('magOwnerName').textContent = `${appState.currentUser ? (appState.currentUser.name || appState.currentUser.email.split('@')[0]) : '회원'} 님`;
   document.getElementById('magOwnerPersona').textContent = `${appState.persona.job} • ${appState.persona.mbti} • ${appState.persona.tone}`;
-
-  // 하이라이트 사진
   document.getElementById('magHighlightPhoto').src = validEntries[0].mediaList[0].src;
 
-  // 주요 4개 일상 조판
   const grid = document.getElementById('magEntriesGrid');
   grid.innerHTML = '';
   validEntries.slice(0, 4).forEach(item => {
@@ -1299,22 +1700,15 @@ function openMagazineModal() {
   lucide.createIcons();
 }
 
-function closeMagazineModal() {
-  document.getElementById('magazineModal').classList.add('hidden');
-}
+function closeMagazineModal() { document.getElementById('magazineModal').classList.add('hidden'); }
 
-// ========================================================
-// 11. 다차원 메모 (전체/주간/월간/고정) & 5단계 플래너
-// ========================================================
+// 다차원 메모
 function setMemoFilter(filter) {
   appState.memoFilter = filter;
   ['all', 'week', 'month', 'pin'].forEach(f => {
     const btn = document.getElementById(`btnMemoFilter${f.charAt(0).toUpperCase() + f.slice(1)}`);
-    if (f === filter) {
-      btn.className = "px-2 py-0.5 rounded-lg bg-white text-theme shadow-2xs font-extrabold";
-    } else {
-      btn.className = "px-2 py-0.5 rounded-lg text-slate-500 font-bold";
-    }
+    if (f === filter) btn.className = "px-2 py-0.5 rounded-lg bg-white text-theme shadow-2xs font-extrabold";
+    else btn.className = "px-2 py-0.5 rounded-lg text-slate-500 font-bold";
   });
   renderFilteredMemos();
 }
@@ -1363,9 +1757,6 @@ function renderFilteredMemos() {
 
   if (appState.memoFilter === 'pin') {
     list = list.filter(m => m.isPinned);
-  } else if (appState.memoFilter === 'week') {
-    // 7일 이내
-    list = list.filter(m => m.date || m.createdAt);
   } else if (appState.memoFilter === 'month') {
     const currentYM = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
     list = list.filter(m => (m.date && m.date.startsWith(currentYM)) || m.createdAt.startsWith(today.getFullYear().toString()));
@@ -1419,11 +1810,8 @@ function setTodoScope(scope) {
   appState.currentTodoScope = scope;
   ['all', 'today', 'week', 'month', 'year', 'long'].forEach(s => {
     const btn = document.getElementById(`btnScope${s.charAt(0).toUpperCase() + s.slice(1)}`);
-    if (s === scope) {
-      btn.className = "py-1.5 rounded-xl bg-white text-theme shadow-2xs font-black";
-    } else {
-      btn.className = "py-1.5 rounded-xl text-slate-500 font-bold";
-    }
+    if (s === scope) btn.className = "py-1.5 rounded-xl bg-white text-theme shadow-2xs font-black";
+    else btn.className = "py-1.5 rounded-xl text-slate-500 font-bold";
   });
   renderCategorizedTodoList();
 }
@@ -1497,9 +1885,7 @@ function deleteTodoItem(scope, id) {
   renderCategorizedTodoList();
 }
 
-// ========================================================
-// 12. 키워드, 타임라인, 인포그래픽, 후기/문의/관리자
-// ========================================================
+// 키워드 & 타임라인
 function renderPresetKeywords() {
   const grid = document.getElementById('keywordChipsGrid');
   grid.innerHTML = '';
@@ -1657,16 +2043,13 @@ function renderTimeline() {
   lucide.createIcons();
 }
 
-// 감정 인포그래픽 리포트
+// 감정 리포트
 function setReportPeriod(period) {
   appState.reportPeriod = period;
   ['today', 'week', 'month', 'year'].forEach(p => {
     const btn = document.getElementById(`btnReport${p.charAt(0).toUpperCase() + p.slice(1)}`);
-    if (p === period) {
-      btn.className = "py-1.5 rounded-xl bg-white text-theme shadow-2xs font-black";
-    } else {
-      btn.className = "py-1.5 rounded-xl text-slate-500 font-bold";
-    }
+    if (p === period) btn.className = "py-1.5 rounded-xl bg-white text-theme shadow-2xs font-black";
+    else btn.className = "py-1.5 rounded-xl text-slate-500 font-bold";
   });
 
   const titles = { today: "오늘 하루 분석", week: "이번 주 누적 분석", month: "9월 누적 종합", year: "2026년 전체 종합" };
@@ -1742,68 +2125,6 @@ function updateEmotionCharts() {
 
   pieChartInstance.update();
   radarChartInstance.update();
-}
-
-// 회원 인증 모달
-function openAuthModal() { document.getElementById('authModal').classList.remove('hidden'); }
-function closeAuthModal() { document.getElementById('authModal').classList.add('hidden'); }
-
-function switchAuthTab(type) {
-  const tabLogin = document.getElementById('authTabLogin');
-  const tabSignup = document.getElementById('authTabSignup');
-  const formLogin = document.getElementById('loginForm');
-  const formSignup = document.getElementById('signupForm');
-
-  if (type === 'login') {
-    tabLogin.className = "flex-1 py-1.5 rounded-lg bg-white text-theme shadow-2xs font-extrabold";
-    tabSignup.className = "flex-1 py-1.5 rounded-lg font-bold text-slate-500";
-    formLogin.classList.remove('hidden');
-    formSignup.classList.add('hidden');
-  } else {
-    tabSignup.className = "flex-1 py-1.5 rounded-lg bg-white text-theme shadow-2xs font-extrabold";
-    tabLogin.className = "flex-1 py-1.5 rounded-lg font-bold text-slate-500";
-    formSignup.classList.remove('hidden');
-    formLogin.classList.add('hidden');
-  }
-}
-
-function setSignupRole(role, btnElem) {
-  signupRoleSelected = role;
-  document.querySelectorAll('.role-select-btn').forEach(b => b.classList.remove('selected'));
-  if (btnElem) btnElem.classList.add('selected');
-}
-
-function handleSignupSubmit(e) {
-  e.preventDefault();
-  const email = document.getElementById('signupEmail').value.trim();
-  const pw = document.getElementById('signupPw').value.trim();
-  const birth = document.getElementById('signupBirth').value;
-
-  appState.currentUser = { email, role: signupRoleSelected, birth };
-  persistState();
-  updateUserSessionUI();
-  closeAuthModal();
-  showToast(`환영합니다! [${signupRoleSelected}] 계정으로 등록되었습니다.`);
-}
-
-function handleLoginSubmit(e) {
-  e.preventDefault();
-  const email = document.getElementById('loginEmail').value.trim();
-  appState.currentUser = { email, role: "사용자", birth: "" };
-  persistState();
-  updateUserSessionUI();
-  closeAuthModal();
-  showToast("로그인되었습니다.");
-}
-
-function updateUserSessionUI() {
-  const badge = document.getElementById('headerUserBadge');
-  if (appState.currentUser) {
-    const roleTag = appState.currentUser.role ? `[${appState.currentUser.role}] ` : '';
-    badge.textContent = `${roleTag}${appState.currentUser.email.split('@')[0]}`;
-  } else {
-    badge.textContent = "로그인 필요";
-  }
 }
 
 // 리뷰 & 고객센터
@@ -1889,7 +2210,7 @@ function renderInquiryList() {
   lucide.createIcons();
 }
 
-// 관리자 센터 (0724)
+// 관리자 센터 (비번 0724)
 function promptAdminMode() {
   const now = Date.now();
   if (appState.adminLockUntil && now < appState.adminLockUntil) {
@@ -1971,7 +2292,7 @@ function renderAdminReviews() {
   });
 }
 function exportDataBackupJSON() {
-  const payload = { version: "2.0.0", exportDate: new Date().toISOString(), data: appState };
+  const payload = { version: APP_VERSION, exportDate: new Date().toISOString(), data: appState };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1991,7 +2312,7 @@ function restoreDataFromJSON(event) {
       if (parsed.data) {
         Object.assign(appState, parsed.data);
         persistState();
-        applyAppTheme(appState.currentTheme, false);
+        applyAppTheme(appState.persona.defaultTheme || appState.currentTheme, false);
         renderCalendar();
         renderTimeline();
         renderCategorizedTodoList();
@@ -2056,12 +2377,14 @@ function closeVlogModal() {
   vidEl.src = "";
 }
 
-// 토스트 메시지
+// 공통 토스트 알림창
 function showToast(msg) {
   const toast = document.getElementById('toast');
   const toastMsg = document.getElementById('toastMsg');
   if (!toast || !toastMsg) return;
   toastMsg.textContent = msg;
   toast.classList.remove('opacity-0');
-  setTimeout(() => toast.classList.add('opacity-0'), 2300);
+  setTimeout(() => {
+    toast.classList.add('opacity-0');
+  }, 2300);
 }
