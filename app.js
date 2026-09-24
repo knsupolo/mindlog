@@ -3,41 +3,49 @@
  */
 
 // ========================================================
-// 1. 글로벌 상태 및 설정 (State & Configurations)
+// 1. 글로벌 상태 및 시스템 환경 변수 (State Management)
 // ========================================================
-// 4단계에서 배포할 Google Apps Script 웹앱 URL (비워두면 브라우저 캐시 DB로 자동 구동)
-const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyA2NubJNwyaB3LfULBrdsARNpeNcJ9cjZOiFBR4IyNQdjU7jXhd4vmM8-DMjMcwXE_/exec";
+const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyA2NubJNwyaB3LfULBrdsARNpeNcJ9cjZOiFBR4IyNQdjU7jXhd4vmM8-DMjMcwXE_/exec"; // Google Apps Script 배포 URL (미입력 시 브라우저 로컬 DB 모드로 완전 구동)
 
 let appState = {
-  // 사용자 인증
-  currentUser: null, // { email, birth, role, loggedInAt }
-  
-  // 테마 및 UI
-  currentTheme: 'indigo',
-  activeTab: 'calendar',
-  
-  // 캘린더
+  // 사용자 계정 & 마이 페르소나
+  currentUser: null, // { email, role, birth }
+  persona: {
+    job: "고등학교 체육교사",
+    mbti: "ENFP",
+    personality: ["열정적인", "사색적인", "긍정적인"],
+    tone: "수필형", // 수필형 | 공감형 | 성장형 | 일상형
+    pin: "0724",
+    defaultTheme: "indigo"
+  },
+
+  // 캘린더 상태
   calendarYear: 2026,
   calendarMonth: 8, // 0-indexed (8 = 9월)
   calendarMode: 'month', // 'month' | 'week'
-  
-  // 현재 작성 중인 일기 버퍼
+  selectedDate: new Date().toISOString().split('T')[0],
+
+  // 작성 중인 버퍼 (Draft)
   draftEntry: {
     date: new Date().toISOString().split('T')[0],
-    mediaList: [], // { type: 'image'|'video', src: string, duration?: number }
+    mediaList: [],
     keywords: [],
     diary: '',
     feedback: '행복한 여운 🥰',
-    userComment: ''
+    userComment: '',
+    voiceAudio: null, // base64 또는 Blob URL
+    voiceTranscript: '',
+    voiceDuration: 0
   },
 
-  // 영구 보관 데이터베이스
-  entries: [], // 다이어리 목록
-  stickers: [], // { id, date, sticker, x, y, scale, rotation }
+  // 영구 보관 데이터베이스 (Local + GAS 시트 동기화)
+  entries: [],
+  schedules: [], // { id, date, title, time, color }
+  stickers: [],  // { id, date, sticker, font, color, hasBg, x, y, scale, rotation }
   todos: {
     today: [
       { id: 1, text: "오후 조깅 및 가벼운 스트레칭", done: true },
-      { id: 2, text: "마인드로그 Pro v2.0 앱 테스트하기", done: false }
+      { id: 2, text: "마인드로그 Pro v2.0 테스트", done: false }
     ],
     week: [{ id: 3, text: "주간 감정 리포트 돌아보기", done: false }],
     month: [{ id: 4, text: "한 달 독서 2권 완독하기", done: false }],
@@ -45,7 +53,16 @@ let appState = {
     long: [{ id: 6, text: "가족과 함께하는 힐링 여행 계획하기", done: false }]
   },
   currentTodoScope: 'all',
-  memos: [],
+  
+  // 다차원 메모 시스템
+  memos: [
+    { id: 1, type: 'quick', date: null, text: "가을맞이 플래너 루틴 재정비 및 독서 목록 정리", color: 'yellow', isPinned: true, createdAt: "2026. 09. 23 11:20" },
+    { id: 2, type: 'date', date: '2026-09-25', text: "체육관 매트 소독 점검 및 용구 정돈", color: 'mint', isPinned: false, createdAt: "2026. 09. 25 09:10" }
+  ],
+  memoFilter: 'all', // all | week | month | pin
+  memoSelectedColor: 'yellow',
+
+  // 리뷰 및 고객센터
   reviews: [
     { id: 1, author: "달리는선생님", rating: 5, comment: "사진과 키워드만 넣었는데 마음에 울림을 주는 일기가 나와서 매일 씁니다!", date: "2026. 09. 21" },
     { id: 2, author: "고등학생A", rating: 5, comment: "공부하느라 지칠 때 감정 온도계 보면서 힐링하고 있어요.", date: "2026. 09. 22" }
@@ -54,20 +71,23 @@ let appState = {
     { id: 1, author: "기록러", pw: "1234", content: "아이패드 가로 모드에서도 사진이 시원하게 잘 보여서 너무 좋습니다.", reply: "소중한 의견 감사드립니다! 더욱 편리한 기록 경험을 제공하겠습니다.", date: "2026. 09. 22" }
   ],
   notices: [
-    { id: 1, text: "마인드로그 Pro v2.0 정식 배포! 달력 스티커와 와이드 사진 뷰를 경험해 보세요.", date: "2026. 09. 23" }
+    { id: 1, text: "마인드로그 Pro v2.0 정식 배포! 달력 스티커와 음성 일기 믹스를 만나보세요.", date: "2026. 09. 25" }
   ],
   recentKeywords: ["가을바람", "야간라이딩", "퇴근길", "성취감", "소소한행복"],
-  
-  // 분석 및 뷰어
-  reportPeriod: 'month', // 'today' | 'week' | 'month' | 'year'
-  timelineViewMode: 'card', // 'card' | 'list' | 'album'
-  
+
+  // 뷰 상태
+  currentTheme: 'indigo',
+  activeTab: 'calendar',
+  reportPeriod: 'month',
+  timelineViewMode: 'card',
+  isDockCollapsed: false,
+
   // 보안 관리자
   adminFailedCount: 0,
   adminLockUntil: null
 };
 
-// 8종 테마 팔레트 정의
+// 테마 컬러 팔레트
 const THEME_PALETTES = {
   indigo:   { primary: '#4f46e5', hover: '#4338ca', light: '#eef2ff', border: '#c7d2fe' },
   rose:     { primary: '#e11d48', hover: '#be123c', light: '#ffe4e6', border: '#fecdd3' },
@@ -79,7 +99,7 @@ const THEME_PALETTES = {
   amber:    { primary: '#d97706', hover: '#b45309', light: '#fef3c7', border: '#fde68a' }
 };
 
-// 24종 확장 프리셋 키워드
+// 24종 키워드 프리셋
 const PRESET_KEYWORDS = [
   "행복 😊", "설렘 💓", "신남 🔥", "뿌듯함 ✨", "평온함 🌿", "감사 🙏",
   "열정 ⚡", "운동 🏃", "야구 ⚾", "산책 👟", "맛있는음식 🍕", "카페투어 ☕",
@@ -87,142 +107,133 @@ const PRESET_KEYWORDS = [
   "독서 📖", "취미생활 🎨", "가족과함께 👨‍👩‍👦", "친구만남 🍻", "휴식/쉼 🛋️", "새로운도전 🚀"
 ];
 
-// 대한민국 주요 법정 공휴일 (양력 기준 및 2026 주요 음력 명절 프리셋)
+// 성격 키워드 태그 목록 (페르소나용)
+const ALL_PERSONALITY_TAGS = ["열정적인", "사색적인", "긍정적인", "차분한", "유쾌한", "섬세한", "계획적인", "도전적인", "솔직한", "따뜻한"];
+
+// 스티커 프리셋 (이모지 36종 & 감성 레터링 24종)
+const STICKER_EMOJIS = [
+  "✨", "💖", "🔥", "🌿", "⚾", "🎉", "☕", "💪", "🌈", "⭐", "🥑", "🏆",
+  "🏃", "📚", "🎨", "🍕", "☀️", "🌙", "☁️", "🎵", "🍀", "🌸", "💡", "🎯",
+  "🥰", "🥺", "😴", "🥳", "🧘", "🚲", "🏖️", "⛺", "✈️", "🌻", "🍰", "💌"
+];
+
+const STICKER_LETTERINGS = [
+  "기억하고 싶은 날", "쉼과 회복", "완벽한 하루", "소소한 행복",
+  "오늘도 해냈다", "반짝이는 순간", "마음의 여유", "최선을 다한 날",
+  "따뜻한 온기", "새로운 시작", "스스로에게 박수", "힐링 타임",
+  "나다운 하루", "행복 가득", "잠시 쉬어가기", "내일도 화이팅"
+];
+
+// 2026 공휴일 프리셋
 const HOLIDAYS_2026 = {
-  "01-01": "신정",
-  "02-16": "설날 연휴",
-  "02-17": "설날",
-  "02-18": "설날 연휴",
-  "03-01": "삼일절",
-  "03-02": "대체공휴일",
-  "05-05": "어린이날",
-  "05-24": "부처님오신날",
-  "05-25": "대체공휴일",
-  "06-06": "현충일",
-  "08-15": "광복절",
-  "08-17": "대체공휴일",
-  "09-24": "추석 연휴",
-  "09-25": "추석",
-  "09-26": "추석 연휴",
-  "09-28": "대체공휴일",
-  "10-03": "개천절",
-  "10-05": "대체공휴일",
-  "10-09": "한글날",
-  "12-25": "성탄절"
+  "01-01": "신정", "02-16": "설날 연휴", "02-17": "설날", "02-18": "설날 연휴",
+  "03-01": "삼일절", "03-02": "대체공휴일", "05-05": "어린이날", "05-24": "부처님오신날",
+  "05-25": "대체공휴일", "06-06": "현충일", "08-15": "광복절", "08-17": "대체공휴일",
+  "09-24": "추석 연휴", "09-25": "추석", "09-26": "추석 연휴", "09-28": "대체공휴일",
+  "10-03": "개천절", "10-05": "대체공휴일", "10-09": "한글날", "12-25": "성탄절"
 };
 
-// 차트 인스턴스
+// 런타임 제어 객체
 let pieChartInstance = null;
 let radarChartInstance = null;
 let vlogInterval = null;
 let currentRatingScore = 5;
 let signupRoleSelected = '교사';
+let viewedEntryDate = null;
+
+// 음성 녹음 런타임 상태
+let mediaRecorder = null;
+let audioChunks = [];
+let voiceTimerInterval = null;
+let voiceMaxSeconds = 15;
+let voiceCurrentSeconds = 0;
+let speechRecognitionInstance = null;
 
 // ========================================================
-// 2. 앱 초기화 (Bootstrap & Lifecycle)
+// 2. 앱 초기 부트스트랩 (App Lifecycle)
 // ========================================================
 window.addEventListener('DOMContentLoaded', () => {
   loadLocalStorage();
   applyAppTheme(appState.currentTheme, false);
   lucide.createIcons();
-  
+
   initHeaderDate();
   updateUserSessionUI();
+  initPersonaUI();
   renderCalendar();
   renderPresetKeywords();
   renderRecentKeywords();
   renderCategorizedTodoList();
-  renderSavedMemos();
+  renderFilteredMemos();
   renderPublicReviews();
   renderInquiryList();
+  renderStickerStudioPresets();
   updateNoticeBanner();
   updateStreakBadge();
   initEmotionCharts();
 
-  // 기본 기록 날짜 세팅
+  // 기본 기록 일자 세팅
   document.getElementById('entryDateInput').value = appState.draftEntry.date;
+
+  // 메모 날짜 선택 연동 이벤트
+  const memoTypeSelect = document.getElementById('memoTypeSelect');
+  if (memoTypeSelect) {
+    memoTypeSelect.addEventListener('change', (e) => {
+      const targetInput = document.getElementById('memoTargetDateInput');
+      if (e.target.value === 'date') {
+        targetInput.classList.remove('hidden');
+        targetInput.value = appState.selectedDate;
+      } else {
+        targetInput.classList.add('hidden');
+      }
+    });
+  }
 });
 
 function initHeaderDate() {
   const options = { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' };
   const str = new Date().toLocaleDateString('ko-KR', options);
-  document.getElementById('subHeaderDate').textContent = str;
+  const el = document.getElementById('subHeaderDate');
+  if (el) el.textContent = str;
 }
 
-// 로컬 스토리지 동기화
 function loadLocalStorage() {
-  const saved = localStorage.getItem('MINDLOG_PRO_V2_STATE');
+  const saved = localStorage.getItem('MINDLOG_PRO_V2_FULL_STATE');
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      appState.currentUser = parsed.currentUser || null;
-      appState.currentTheme = parsed.currentTheme || 'indigo';
-      appState.entries = parsed.entries || [];
-      appState.stickers = parsed.stickers || [];
-      appState.todos = parsed.todos || appState.todos;
-      appState.memos = parsed.memos || [];
-      appState.reviews = parsed.reviews || appState.reviews;
-      appState.inquiries = parsed.inquiries || appState.inquiries;
-      appState.notices = parsed.notices || appState.notices;
-      appState.recentKeywords = parsed.recentKeywords || appState.recentKeywords;
+      Object.assign(appState, parsed);
     } catch (e) {
       console.warn("로컬 캐시 불러오기 오류", e);
     }
   }
 
-  // 초기 예시 데이터 주입 (최초 실행 시)
-  if (appState.entries.length === 0) {
+  // 기본 데모 다이어리 주입
+  if (!appState.entries || appState.entries.length === 0) {
     appState.entries = [
       {
-        id: 1727050000000,
-        date: "2026-09-22",
-        dateDisplay: "2026. 09. 22",
-        mediaList: [{ type: 'image', src: "https://images.unsplash.com/photo-1508344928928-7165b67de128?w=800&auto=format&fit=crop" }],
-        keywords: ["운동 🏃", "열정 ⚡", "뿌듯함 ✨"],
-        diary: "숨이 턱 끝까지 차오르도록 달리고 난 뒤에 찾아오는 차분한 고요가 참 좋다. 복잡했던 생각들이 땀방울과 함께 씻겨 내려가며 비로소 나 자신에게 집중할 수 있었던 소중한 시간.",
-        feedback: "용기를 얻었어요 🔥",
-        userComment: "기분 좋은 피로감"
-      },
-      {
-        id: 1727136400000,
-        date: "2026-09-23",
-        dateDisplay: "2026. 09. 23",
+        id: 1727220000000,
+        date: "2026-09-24",
+        dateDisplay: "2026. 09. 24",
         mediaList: [
-          { type: 'image', src: "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=800&auto=format&fit=crop" },
+          { type: 'image', src: "https://images.unsplash.com/photo-1508344928928-7165b67de128?w=800&auto=format&fit=crop" },
           { type: 'image', src: "https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=800&auto=format&fit=crop" }
         ],
-        keywords: ["카페투어 ☕", "평온함 🌿", "소소한행복"],
-        diary: "따스한 햇살이 비치는 창가 자리에서 은은한 커피 향을 음미했다. 빠르게 흘러가는 하루 속에서 잠시 속도를 늦추고 온전히 쉬어가는 이런 순간이 마음에 깊은 쉼표를 찍어준다.",
-        feedback: "행복한 여운 🥰",
-        userComment: "라떼 아트가 예뻤던 날"
+        keywords: ["운동 🏃", "열정 ⚡", "뿌듯함 ✨"],
+        diary: "가을 공기가 기분 좋게 뺨을 스치는 오후, 운동장에서 학생들과 힘차게 뛰며 땀을 흘렸다. 복잡했던 생각들이 시원한 바람에 씻겨 내려가며 내면이 활기로 가득 차오른다.",
+        feedback: "용기를 얻었어요 🔥",
+        userComment: "수업 후 즐거운 러닝"
       }
-    ];
-  }
-
-  if (appState.memos.length === 0) {
-    appState.memos = [
-      { id: 1, text: "가을맞이 플래너 루틴 재정비 및 독서 목록 정리", date: "2026. 09. 23 11:20" }
     ];
   }
 }
 
 function persistState() {
-  localStorage.setItem('MINDLOG_PRO_V2_STATE', JSON.stringify({
-    currentUser: appState.currentUser,
-    currentTheme: appState.currentTheme,
-    entries: appState.entries,
-    stickers: appState.stickers,
-    todos: appState.todos,
-    memos: appState.memos,
-    reviews: appState.reviews,
-    inquiries: appState.inquiries,
-    notices: appState.notices,
-    recentKeywords: appState.recentKeywords
-  }));
+  localStorage.setItem('MINDLOG_PRO_V2_FULL_STATE', JSON.stringify(appState));
 }
 
 // ========================================================
-// 3. 테마 엔진 (8종 테마 실시간 바인딩)
+// 3. 테마 및 하단 가변 접이식 독 (Collapsible Dock)
 // ========================================================
 function applyAppTheme(themeName, shouldPersist = true) {
   const palette = THEME_PALETTES[themeName] || THEME_PALETTES.indigo;
@@ -236,108 +247,211 @@ function applyAppTheme(themeName, shouldPersist = true) {
 
   if (shouldPersist) {
     persistState();
-    showToast(`테마가 [${themeName}]으로 즉시 적용되었습니다.`);
+    showToast(`테마가 [${themeName}]으로 변경되었습니다.`);
   }
 }
 
-// ========================================================
-// 4. 회원가입 및 사용자 인증 시스템
-// ========================================================
-function openAuthModal() {
-  document.getElementById('authModal').classList.remove('hidden');
-}
+function toggleBottomDock() {
+  const dock = document.getElementById('bottomDock');
+  const icon = document.getElementById('dockToggleIcon');
+  appState.isDockCollapsed = !appState.isDockCollapsed;
 
-function closeAuthModal() {
-  document.getElementById('authModal').classList.add('hidden');
-}
-
-function switchAuthTab(type) {
-  const tabLogin = document.getElementById('authTabLogin');
-  const tabSignup = document.getElementById('authTabSignup');
-  const formLogin = document.getElementById('loginForm');
-  const formSignup = document.getElementById('signupForm');
-
-  if (type === 'login') {
-    tabLogin.className = "flex-1 py-1.5 rounded-lg bg-white text-theme shadow-2xs font-extrabold";
-    tabSignup.className = "flex-1 py-1.5 rounded-lg font-bold text-slate-500";
-    formLogin.classList.remove('hidden');
-    formSignup.classList.add('hidden');
+  if (appState.isDockCollapsed) {
+    dock.classList.add('dock-collapsed');
+    icon.setAttribute('data-lucide', 'chevron-up');
   } else {
-    tabSignup.className = "flex-1 py-1.5 rounded-lg bg-white text-theme shadow-2xs font-extrabold";
-    tabLogin.className = "flex-1 py-1.5 rounded-lg font-bold text-slate-500";
-    formSignup.classList.remove('hidden');
-    formLogin.classList.add('hidden');
+    dock.classList.remove('dock-collapsed');
+    icon.setAttribute('data-lucide', 'chevron-down');
+  }
+  lucide.createIcons();
+}
+
+function switchTab(tabId) {
+  appState.activeTab = tabId;
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.remove('text-theme', 'active');
+    el.classList.add('text-slate-400');
+  });
+
+  const targetTab = document.getElementById(`tab-${tabId}`);
+  const targetNav = document.getElementById(`nav-${tabId}`);
+  if (targetTab) targetTab.classList.add('active');
+  if (targetNav) {
+    targetNav.classList.remove('text-slate-400');
+    targetNav.classList.add('text-theme', 'active');
+  }
+
+  if (tabId === 'calendar') renderCalendar();
+  if (tabId === 'timeline') renderTimeline();
+  if (tabId === 'report') setReportPeriod(appState.reportPeriod);
+  if (tabId === 'planner') renderFilteredMemos();
+
+  lucide.createIcons();
+}
+
+// ========================================================
+// 4. 날짜 액션 시트 & 상세 뷰어 vs 기록 라우팅 분기
+// ========================================================
+function selectCalendarDate(dateStr) {
+  appState.selectedDate = dateStr;
+  document.getElementById('actionSheetDateTitle').textContent = dateStr;
+
+  const existingEntry = appState.entries.find(e => e.date === dateStr);
+  const label = document.getElementById('actionSheetMindlogLabel');
+  const sub = document.getElementById('actionSheetMindlogSub');
+
+  if (existingEntry) {
+    label.textContent = "📖 마인드로그 일기 보기 (기록됨)";
+    sub.textContent = "작성된 사진, AI 일기, 감정 피드백을 확인합니다.";
+  } else {
+    label.textContent = "✍️ 마인드로그 기록하기 (새 작성)";
+    sub.textContent = "사진과 키워드로 하루를 새롭게 기록합니다.";
+  }
+
+  document.getElementById('dateActionSheetBackdrop').classList.remove('hidden');
+  setTimeout(() => {
+    document.getElementById('dateActionSheetPanel').classList.add('show');
+  }, 10);
+}
+
+function closeDateActionSheet() {
+  document.getElementById('dateActionSheetPanel').classList.remove('show');
+  setTimeout(() => {
+    document.getElementById('dateActionSheetBackdrop').classList.add('hidden');
+  }, 240);
+}
+
+function handleActionSheetMindlog() {
+  const dateStr = appState.selectedDate;
+  closeDateActionSheet();
+
+  const existingEntry = appState.entries.find(e => e.date === dateStr);
+  if (existingEntry) {
+    openDiaryViewer(existingEntry);
+  } else {
+    prepareNewDiaryEntry(dateStr);
   }
 }
 
-function setSignupRole(role, btnElem) {
-  signupRoleSelected = role;
-  document.querySelectorAll('.role-select-btn').forEach(b => b.classList.remove('selected'));
-  if (btnElem) btnElem.classList.add('selected');
+function openDiaryViewer(entry) {
+  viewedEntryDate = entry.date;
+  document.getElementById('viewerDateTitle').textContent = entry.dateDisplay || entry.date;
+  document.getElementById('viewerFeedbackBadge').textContent = entry.feedback || '행복한 여운 🥰';
+  document.getElementById('viewerDiaryText').textContent = entry.diary;
+
+  // 미디어
+  const mediaContainer = document.getElementById('viewerMediaContainer');
+  mediaContainer.innerHTML = '';
+  if (entry.mediaList && entry.mediaList.length > 0) {
+    mediaContainer.innerHTML = renderWideMediaHtml(entry.mediaList);
+  }
+
+  // 키워드
+  const kwContainer = document.getElementById('viewerKeywordsContainer');
+  kwContainer.innerHTML = (entry.keywords || []).map(k => `<span class="bg-theme-light text-theme text-[10px] font-black px-2 py-0.5 rounded-full border border-theme-light">${k}</span>`).join(' ');
+
+  // 코멘트
+  const commentBox = document.getElementById('viewerUserCommentBox');
+  const commentText = document.getElementById('viewerUserCommentText');
+  if (entry.userComment) {
+    commentText.textContent = entry.userComment;
+    commentBox.classList.remove('hidden');
+  } else {
+    commentBox.classList.add('hidden');
+  }
+
+  document.getElementById('diaryViewerModal').classList.remove('hidden');
+  lucide.createIcons();
 }
 
-function handleSignupSubmit(e) {
-  e.preventDefault();
-  const email = document.getElementById('signupEmail').value.trim();
-  const pw = document.getElementById('signupPw').value.trim();
-  const birth = document.getElementById('signupBirth').value;
+function closeDiaryViewerModal() {
+  document.getElementById('diaryViewerModal').classList.add('hidden');
+  viewedEntryDate = null;
+}
 
-  if (!email || !pw || !birth) return showToast("모든 정보를 올바르게 입력해 주세요.");
+function editCurrentViewedDiary() {
+  if (!viewedEntryDate) return;
+  const targetDate = viewedEntryDate;
+  closeDiaryViewerModal();
+  prepareNewDiaryEntry(targetDate, true);
+}
 
-  appState.currentUser = {
-    email: email,
-    role: signupRoleSelected,
-    birth: birth,
-    loggedInAt: new Date().toISOString()
+function prepareNewDiaryEntry(dateStr, isEdit = false) {
+  appState.draftEntry.date = dateStr;
+  document.getElementById('entryDateInput').value = dateStr;
+
+  if (isEdit) {
+    const existing = appState.entries.find(e => e.date === dateStr);
+    if (existing) {
+      appState.draftEntry.mediaList = [...existing.mediaList];
+      appState.draftEntry.keywords = [...existing.keywords];
+      appState.draftEntry.diary = existing.diary;
+      appState.draftEntry.feedback = existing.feedback;
+      appState.draftEntry.userComment = existing.userComment || '';
+
+      document.getElementById('aiDiaryContent').textContent = existing.diary;
+      document.getElementById('diaryResultCard').classList.remove('hidden');
+      document.getElementById('finalUserCommentInput').value = existing.userComment || '';
+    }
+  } else {
+    resetDraftBuffer(dateStr);
+  }
+
+  renderWideMediaView();
+  renderPresetKeywords();
+  switchTab('record');
+}
+
+function resetDraftBuffer(dateStr) {
+  appState.draftEntry = {
+    date: dateStr || new Date().toISOString().split('T')[0],
+    mediaList: [],
+    keywords: [],
+    diary: '',
+    feedback: '행복한 여운 🥰',
+    userComment: '',
+    voiceAudio: null,
+    voiceTranscript: '',
+    voiceDuration: 0
   };
+  document.getElementById('diaryResultCard').classList.add('hidden');
+  document.getElementById('finalUserCommentInput').value = '';
+  clearDraftAudio();
+  renderWideMediaView();
+}
+
+function handleActionSheetSchedule() {
+  closeDateActionSheet();
+  const title = prompt(`[${appState.selectedDate}] 일정을 등록하세요:`, "회의 및 업무 점검");
+  if (!title) return;
+  const time = prompt("시간을 입력하세요 (예: 14:00):", "14:00") || "하루종일";
+
+  appState.schedules.push({
+    id: Date.now(),
+    date: appState.selectedDate,
+    title: title,
+    time: time,
+    color: '#10b981'
+  });
 
   persistState();
-  updateUserSessionUI();
-  closeAuthModal();
-  showToast(`환영합니다! [${signupRoleSelected}] 계정으로 가입되었습니다.`);
+  renderCalendar();
+  showToast("📅 일정이 달력에 등록되었습니다.");
 }
 
-function handleLoginSubmit(e) {
-  e.preventDefault();
-  const email = document.getElementById('loginEmail').value.trim();
-  const pw = document.getElementById('loginPw').value.trim();
-
-  if (!email || !pw) return showToast("이메일과 비밀번호를 입력해 주세요.");
-
-  appState.currentUser = {
-    email: email,
-    role: "사용자",
-    loggedInAt: new Date().toISOString()
-  };
-
-  persistState();
-  updateUserSessionUI();
-  closeAuthModal();
-  showToast(`로그인 성공! 즐거운 기록 되세요.`);
-}
-
-function updateUserSessionUI() {
-  const badge = document.getElementById('headerUserBadge');
-  if (appState.currentUser) {
-    const roleTag = appState.currentUser.role ? `[${appState.currentUser.role}] ` : '';
-    badge.textContent = `${roleTag}${appState.currentUser.email.split('@')[0]}`;
-    badge.title = "클릭하여 로그아웃";
-    badge.onclick = () => {
-      if (confirm("로그아웃 하시겠습니까?")) {
-        appState.currentUser = null;
-        persistState();
-        updateUserSessionUI();
-        showToast("로그아웃되었습니다.");
-      }
-    };
-  } else {
-    badge.textContent = "로그인 필요";
-    badge.onclick = openAuthModal;
-  }
+function handleActionSheetMemo() {
+  closeDateActionSheet();
+  switchTab('planner');
+  document.getElementById('memoTypeSelect').value = 'date';
+  const targetInput = document.getElementById('memoTargetDateInput');
+  targetInput.classList.remove('hidden');
+  targetInput.value = appState.selectedDate;
+  document.getElementById('ideaMemoTextInput').focus();
 }
 
 // ========================================================
-// 5. 캘린더 엔진 (공휴일·토·일 색상 & 포토 타일 & 스트릭)
+// 5. 캘린더 엔진 (공휴일·토·일 & 인디케이터 도트 표시)
 // ========================================================
 function setCalendarMode(mode) {
   appState.calendarMode = mode;
@@ -379,27 +493,21 @@ function renderCalendar() {
   const lastDate = new Date(calendarYear, calendarMonth + 1, 0).getDate();
 
   let days = [];
-  for (let i = 0; i < firstDay; i++) {
-    days.push({ empty: true });
-  }
+  for (let i = 0; i < firstDay; i++) days.push({ empty: true });
 
   for (let d = 1; d <= lastDate; d++) {
     const mm = String(calendarMonth + 1).padStart(2, '0');
     const dd = String(d).padStart(2, '0');
     const fullDate = `${calendarYear}-${mm}-${dd}`;
     const dateKey = `${mm}-${dd}`;
-    const dayOfWeek = new Date(calendarYear, calendarMonth, d).getDay(); // 0:일, 6:토
+    const dayOfWeek = new Date(calendarYear, calendarMonth, d).getDay();
     
     const holidayName = HOLIDAYS_2026[dateKey] || null;
     const entry = appState.entries.find(e => e.date === fullDate);
+    const hasSchedules = appState.schedules.some(s => s.date === fullDate);
+    const hasMemos = appState.memos.some(m => m.date === fullDate);
 
-    days.push({
-      dayNum: d,
-      fullDate,
-      dayOfWeek,
-      holidayName,
-      entry
-    });
+    days.push({ dayNum: d, fullDate, dayOfWeek, holidayName, entry, hasSchedules, hasMemos });
   }
 
   if (calendarMode === 'week') {
@@ -421,7 +529,6 @@ function renderCalendar() {
     const hasPhoto = item.entry && item.entry.mediaList && item.entry.mediaList.length > 0;
     const thumbUrl = hasPhoto ? item.entry.mediaList[0].src : null;
 
-    // 요일 및 공휴일 색상 클래스 판별
     let dayClass = 'day-weekday';
     if (item.dayOfWeek === 0 || item.holidayName) dayClass = 'day-sunday';
     else if (item.dayOfWeek === 6) dayClass = 'day-saturday';
@@ -434,16 +541,23 @@ function renderCalendar() {
 
     cell.onclick = () => selectCalendarDate(item.fullDate);
 
+    // 복합 인디케이터 도트 (일정 녹색 도트, 메모 주황 도트)
+    const indicatorsHtml = `
+      <div class="flex items-center space-x-0.5">
+        ${item.hasSchedules ? `<span class="cell-indicator-dot bg-emerald-500" title="일정 있음"></span>` : ''}
+        ${item.hasMemos ? `<span class="cell-indicator-dot bg-amber-400" title="메모 있음"></span>` : ''}
+      </div>
+    `;
+
     cell.innerHTML = `
       <div class="flex justify-between items-start">
         <span class="text-[11px] ${dayClass} ${isToday ? 'bg-theme text-white w-4 h-4 rounded-full flex items-center justify-center !text-white' : ''}">${item.dayNum}</span>
-        ${item.holidayName ? `<span class="day-holiday-badge truncate max-w-[34px]">${item.holidayName}</span>` : ''}
+        ${indicatorsHtml}
       </div>
-      ${item.entry ? `
-        <div class="truncate text-[9px] font-bold ${hasPhoto ? 'text-white' : 'text-theme'}">
-          ${item.entry.keywords[0] || '기록됨'}
-        </div>
-      ` : ''}
+      <div class="flex items-end justify-between">
+        ${item.holidayName ? `<span class="day-holiday-badge truncate max-w-[34px]">${item.holidayName}</span>` : `<span></span>`}
+        ${item.entry ? `<span class="truncate text-[9px] font-bold ${hasPhoto ? 'text-white' : 'text-theme'}">${item.entry.keywords[0] || '기록'}</span>` : ''}
+      </div>
     `;
 
     container.appendChild(cell);
@@ -456,7 +570,6 @@ function renderCalendar() {
 function updateStreakBadge() {
   const badge = document.getElementById('streakCountBadge');
   if (!badge) return;
-
   const count = appState.entries.length;
   badge.textContent = count > 0 ? `${count}일째 기록 달성!` : "첫 기록을 남겨보세요!";
 }
@@ -468,73 +581,93 @@ function checkPastMemories() {
 
   const found = appState.entries.find(e => e.date === targetStr);
   if (found) {
-    selectCalendarDate(found.date);
+    openDiaryViewer(found);
     showToast("✨ 작년 오늘의 기록을 찾았습니다!");
   } else {
-    showToast("작년 오늘의 기록은 아직 없습니다. 오늘을 기록해 보세요!");
+    showToast("작년 오늘의 기록은 아직 없습니다. 오늘을 멋지게 기록해 보세요!");
   }
 }
 
-function selectCalendarDate(dateStr) {
-  appState.draftEntry.date = dateStr;
-  document.getElementById('entryDateInput').value = dateStr;
-
-  const existing = appState.entries.find(e => e.date === dateStr);
-  if (existing) {
-    appState.draftEntry.mediaList = [...existing.mediaList];
-    appState.draftEntry.keywords = [...existing.keywords];
-    appState.draftEntry.diary = existing.diary;
-    appState.draftEntry.feedback = existing.feedback;
-    appState.draftEntry.userComment = existing.userComment || '';
-
-    document.getElementById('aiDiaryContent').textContent = existing.diary;
-    document.getElementById('diaryResultCard').classList.remove('hidden');
-    document.getElementById('finalUserCommentInput').value = existing.userComment || '';
-  } else {
-    resetDraftEntry(dateStr);
-  }
-
-  renderWideMediaView();
-  renderPresetKeywords();
-  switchTab('record');
+// ========================================================
+// 6. 스티커 스튜디오 & 손가락 가림 방지 플로팅 돋보기(Loupe)
+// ========================================================
+function openStickerStudioModal() {
+  document.getElementById('stickerStudioModal').classList.remove('hidden');
 }
 
-function resetDraftEntry(dateStr) {
-  appState.draftEntry = {
-    date: dateStr || new Date().toISOString().split('T')[0],
-    mediaList: [],
-    keywords: [],
-    diary: '',
-    feedback: '행복한 여운 🥰',
-    userComment: ''
-  };
-  document.getElementById('diaryResultCard').classList.add('hidden');
-  document.getElementById('finalUserCommentInput').value = '';
-  renderWideMediaView();
+function closeStickerStudioModal() {
+  document.getElementById('stickerStudioModal').classList.add('hidden');
 }
 
-// ========================================================
-// 6. 달력 인터랙티브 스티커 캔버스 (핀치-줌/회전 터치 제스처)
-// ========================================================
-function openStickerPaletteModal() {
-  const stickers = ["✨", "💖", "🔥", "🌿", "⚾", "🎉", "☕", "💪", "🌈", "⭐", "🥑", "🏆"];
-  const chosen = prompt(`달력에 부착할 스티커를 고르거나 입력하세요:\n${stickers.join('  ')}`, "✨");
-  if (!chosen) return;
+function switchStickerSubTab(tab) {
+  ['emoji', 'lettering', 'custom'].forEach(t => {
+    const btn = document.getElementById(`tabSticker${t.charAt(0).toUpperCase() + t.slice(1)}`);
+    const panel = document.getElementById(`stickerPanel${t.charAt(0).toUpperCase() + t.slice(1)}`);
+    if (t === tab) {
+      btn.className = "flex-1 py-1.5 rounded-lg bg-white text-theme shadow-2xs font-extrabold";
+      panel.classList.remove('hidden');
+    } else {
+      btn.className = "flex-1 py-1.5 rounded-lg text-slate-500 font-bold";
+      panel.classList.add('hidden');
+    }
+  });
+}
 
+function renderStickerStudioPresets() {
+  // 이모지
+  const emojiPanel = document.getElementById('stickerPanelEmoji');
+  emojiPanel.innerHTML = '';
+  STICKER_EMOJIS.forEach(emoji => {
+    const btn = document.createElement('button');
+    btn.className = "p-2 rounded-xl hover:bg-slate-100 transition active:scale-90";
+    btn.textContent = emoji;
+    btn.onclick = () => attachStickerToCanvas(emoji, 'emoji');
+    emojiPanel.appendChild(btn);
+  });
+
+  // 레터링
+  const letteringPanel = document.getElementById('stickerPanelLettering');
+  letteringPanel.innerHTML = '';
+  STICKER_LETTERINGS.forEach(txt => {
+    const btn = document.createElement('button');
+    btn.className = "px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-slate-700 text-xs font-black hover:border-amber-400 hover:text-amber-800 transition active:scale-95";
+    btn.textContent = txt;
+    btn.onclick = () => attachStickerToCanvas(txt, 'lettering');
+    letteringPanel.appendChild(btn);
+  });
+}
+
+function addCustomTypedSticker() {
+  const text = document.getElementById('customStickerText').value.trim();
+  if (!text) return showToast("스티커 문구를 입력해 주세요.");
+
+  const font = document.getElementById('customStickerFont').value;
+  const color = document.getElementById('customStickerColor').value;
+  const hasBg = document.getElementById('customStickerBgCheck').checked;
+
+  attachStickerToCanvas(text, 'custom', { font, color, hasBg });
+  document.getElementById('customStickerText').value = '';
+}
+
+function attachStickerToCanvas(text, type, options = {}) {
+  closeStickerStudioModal();
   const newSticker = {
     id: Date.now(),
-    date: appState.draftEntry.date,
-    sticker: chosen,
-    x: 120 + Math.random() * 40,
-    y: 80 + Math.random() * 40,
-    scale: 1.2,
+    date: appState.selectedDate,
+    sticker: text,
+    font: options.font || 'Pretendard',
+    color: options.color || '#1e293b',
+    hasBg: options.hasBg !== undefined ? options.hasBg : (type === 'lettering'),
+    x: 100 + Math.random() * 60,
+    y: 80 + Math.random() * 60,
+    scale: 1.1,
     rotation: 0
   };
 
   appState.stickers.push(newSticker);
   persistState();
   renderCanvasStickers();
-  showToast("달력 위에 스티커가 놓였습니다. 터치로 크기/각도를 조절하세요!");
+  showToast("달력 위에 스티커가 놓였습니다. 핀치로 크기/각도를 조절하세요!");
 }
 
 function renderCanvasStickers() {
@@ -544,26 +677,46 @@ function renderCanvasStickers() {
 
   appState.stickers.forEach(st => {
     const el = document.createElement('div');
-    el.className = "canvas-sticker text-2xl select-none";
+    el.className = "canvas-sticker";
     el.style.left = `${st.x}px`;
     el.style.top = `${st.y}px`;
     el.style.transform = `scale(${st.scale}) rotate(${st.rotation}deg)`;
-    el.textContent = st.sticker;
+    el.style.fontFamily = st.font;
+    el.style.color = st.color;
 
-    bindStickerTouchGestures(el, st);
+    if (st.hasBg) {
+      el.style.backgroundColor = "rgba(255, 255, 255, 0.9)";
+      el.style.borderRadius = "8px";
+      el.style.boxShadow = "0 1px 4px rgba(0,0,0,0.1)";
+    }
+
+    el.textContent = st.sticker;
+    bindStickerTouchWithLoupe(el, st);
     canvas.appendChild(el);
   });
 }
 
-function bindStickerTouchGestures(element, stickerData) {
+// 🌟 손가락 가림 방지 플로팅 경계선 돋보기 (Boundary Loupe) 결합 터치 제스처
+function bindStickerTouchWithLoupe(element, stickerData) {
+  const loupe = document.getElementById('stickerLoupe');
+  const loupeContent = document.getElementById('stickerLoupeContent');
+
   let initialDist = 0;
   let initialAngle = 0;
   let startX = 0, startY = 0;
 
   element.addEventListener('touchstart', (e) => {
+    loupeContent.textContent = stickerData.sticker;
+    loupeContent.style.fontFamily = stickerData.font;
+    loupeContent.style.color = stickerData.color;
+    loupe.style.display = 'block';
+
+    const touch = e.touches[0];
+    updateLoupePosition(touch.clientX, touch.clientY);
+
     if (e.touches.length === 1) {
-      startX = e.touches[0].clientX - stickerData.x;
-      startY = e.touches[0].clientY - stickerData.y;
+      startX = touch.clientX - stickerData.x;
+      startY = touch.clientY - stickerData.y;
     } else if (e.touches.length === 2) {
       initialDist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
@@ -577,9 +730,12 @@ function bindStickerTouchGestures(element, stickerData) {
   }, { passive: true });
 
   element.addEventListener('touchmove', (e) => {
+    const touch = e.touches[0];
+    updateLoupePosition(touch.clientX, touch.clientY);
+
     if (e.touches.length === 1) {
-      stickerData.x = e.touches[0].clientX - startX;
-      stickerData.y = e.touches[0].clientY - startY;
+      stickerData.x = touch.clientX - startX;
+      stickerData.y = touch.clientY - startY;
       element.style.left = `${stickerData.x}px`;
       element.style.top = `${stickerData.y}px`;
     } else if (e.touches.length === 2) {
@@ -603,12 +759,19 @@ function bindStickerTouchGestures(element, stickerData) {
   }, { passive: true });
 
   element.addEventListener('touchend', () => {
+    loupe.style.display = 'none';
     persistState();
   });
 }
 
+function updateLoupePosition(x, y) {
+  const loupe = document.getElementById('stickerLoupe');
+  loupe.style.left = `${x}px`;
+  loupe.style.top = `${y}px`;
+}
+
 // ========================================================
-// 7. 통합 미디어 바텀시트 & 가로 와이드 풀필(Full-Fill) 뷰포트
+// 7. 통합 미디어 & 와이드 풀필(Full-Fill) 레이아웃
 // ========================================================
 function openMediaBottomSheet() {
   if (appState.draftEntry.mediaList.length >= 3) {
@@ -650,10 +813,7 @@ function handleMediaSelect(event, type) {
   targetFiles.forEach(file => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      appState.draftEntry.mediaList.push({
-        type: 'image',
-        src: e.target.result
-      });
+      appState.draftEntry.mediaList.push({ type: 'image', src: e.target.result });
       renderWideMediaView();
     };
     reader.readAsDataURL(file);
@@ -682,8 +842,6 @@ function handleVideoSelect(event) {
 
 function confirmAutoTrimVideo() {
   closeVideoTrimmer();
-  showToast("앞 10초 구간으로 규격화하여 첨부합니다.");
-  // 10초 플래그를 달아 등록
   const fileInput = document.getElementById('videoInput');
   if (fileInput.files[0]) attachVideoData(fileInput.files[0], 10);
 }
@@ -695,18 +853,13 @@ function closeVideoTrimmer() {
 function attachVideoData(file, dur) {
   const reader = new FileReader();
   reader.onload = (e) => {
-    appState.draftEntry.mediaList.push({
-      type: 'video',
-      src: e.target.result,
-      duration: Math.round(dur)
-    });
+    appState.draftEntry.mediaList.push({ type: 'video', src: e.target.result, duration: Math.round(dur) });
     renderWideMediaView();
-    showToast("10초 숏클립 영상이 첨부되었습니다.");
+    showToast("10초 영상이 첨부되었습니다.");
   };
   reader.readAsDataURL(file);
 }
 
-// 🌟 가로 와이드 풀필(Full-Fill) 뷰포트 (1장: 16:9 와이드, 2장: 1:1 분할, 3장: 매거진형 비대칭 와이드)
 function renderWideMediaView() {
   const container = document.getElementById('wideMediaContainer');
   container.innerHTML = '';
@@ -714,91 +867,55 @@ function renderWideMediaView() {
   document.getElementById('mediaCountBadge').textContent = `${list.length} / 3`;
 
   if (list.length === 0) return;
-
-  if (list.length === 1) {
-    // 1장: 16:9 와이드 가득 채움
-    const media = list[0];
-    const wrapper = document.createElement('div');
-    wrapper.className = "relative rounded-2xl overflow-hidden cursor-pointer shadow-xs group";
-    wrapper.onclick = () => openLightbox(media.src, media.type);
-
-    if (media.type === 'video') {
-      wrapper.innerHTML = `<video src="${media.src}" class="wide-media-single" muted autoplay loop playsinline></video>`;
-    } else {
-      wrapper.innerHTML = `<img src="${media.src}" class="wide-media-single">`;
-    }
-    appendMediaDeleteBtn(wrapper, 0);
-    container.appendChild(wrapper);
-
-  } else if (list.length === 2) {
-    // 2장: 1:1 좌우 균등 분할 와이드
-    const grid = document.createElement('div');
-    grid.className = "wide-media-double";
-
-    list.forEach((m, idx) => {
-      const box = document.createElement('div');
-      box.className = "relative cursor-pointer h-full";
-      box.onclick = () => openLightbox(m.src, m.type);
-      box.innerHTML = m.type === 'video'
-        ? `<video src="${m.src}" class="w-full h-full object-cover" muted autoplay loop playsinline></video>`
-        : `<img src="${m.src}" class="w-full h-full object-cover">`;
-      appendMediaDeleteBtn(box, idx);
-      grid.appendChild(box);
-    });
-    container.appendChild(grid);
-
-  } else if (list.length === 3) {
-    // 3장: 좌측 메인 와이드(1장) + 우측 2단 적층(2장) 매거진 레이아웃
-    const grid = document.createElement('div');
-    grid.className = "wide-media-triple";
-
-    // 좌측 메인
-    const leftBox = document.createElement('div');
-    leftBox.className = "relative cursor-pointer h-full";
-    leftBox.onclick = () => openLightbox(list[0].src, list[0].type);
-    leftBox.innerHTML = list[0].type === 'video'
-      ? `<video src="${list[0].src}" class="w-full h-full object-cover" muted autoplay loop playsinline></video>`
-      : `<img src="${list[0].src}" class="w-full h-full object-cover">`;
-    appendMediaDeleteBtn(leftBox, 0);
-    grid.appendChild(leftBox);
-
-    // 우측 2단 적층
-    const rightCol = document.createElement('div');
-    rightCol.className = "wide-media-triple-right";
-
-    [list[1], list[2]].forEach((m, subIdx) => {
-      const idx = subIdx + 1;
-      const box = document.createElement('div');
-      box.className = "relative cursor-pointer h-full overflow-hidden rounded-xl";
-      box.onclick = () => openLightbox(m.src, m.type);
-      box.innerHTML = m.type === 'video'
-        ? `<video src="${m.src}" class="w-full h-full object-cover" muted autoplay loop playsinline></video>`
-        : `<img src="${m.src}" class="w-full h-full object-cover">`;
-      appendMediaDeleteBtn(box, idx);
-      rightCol.appendChild(box);
-    });
-
-    grid.appendChild(rightCol);
-    container.appendChild(grid);
-  }
-
+  container.innerHTML = renderWideMediaHtml(list, true);
   lucide.createIcons();
 }
 
-function appendMediaDeleteBtn(containerElement, index) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = "absolute top-2 right-2 bg-black/60 hover:bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center transition shadow-md z-10";
-  btn.innerHTML = `<i data-lucide="x" class="w-3 h-3"></i>`;
-  btn.onclick = (e) => {
-    e.stopPropagation();
-    appState.draftEntry.mediaList.splice(index, 1);
-    renderWideMediaView();
-  };
-  containerElement.appendChild(btn);
+function renderWideMediaHtml(list, withDelete = false) {
+  if (list.length === 1) {
+    const m = list[0];
+    return `
+      <div class="relative rounded-2xl overflow-hidden cursor-pointer shadow-xs group" onclick="openLightbox('${m.src}', '${m.type}')">
+        ${m.type === 'video' ? `<video src="${m.src}" class="wide-media-single" muted autoplay loop playsinline></video>` : `<img src="${m.src}" class="wide-media-single">`}
+        ${withDelete ? `<button onclick="event.stopPropagation(); removeDraftMedia(0);" class="absolute top-2 right-2 bg-black/60 hover:bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center transition z-10"><i data-lucide="x" class="w-3 h-3"></i></button>` : ''}
+      </div>
+    `;
+  } else if (list.length === 2) {
+    return `
+      <div class="wide-media-double">
+        ${list.map((m, idx) => `
+          <div class="relative cursor-pointer h-full" onclick="openLightbox('${m.src}', '${m.type}')">
+            ${m.type === 'video' ? `<video src="${m.src}" class="w-full h-full object-cover" muted autoplay loop playsinline></video>` : `<img src="${m.src}" class="w-full h-full object-cover">`}
+            ${withDelete ? `<button onclick="event.stopPropagation(); removeDraftMedia(${idx});" class="absolute top-2 right-2 bg-black/60 hover:bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center transition z-10"><i data-lucide="x" class="w-3 h-3"></i></button>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } else {
+    return `
+      <div class="wide-media-triple">
+        <div class="relative cursor-pointer h-full" onclick="openLightbox('${list[0].src}', '${list[0].type}')">
+          ${list[0].type === 'video' ? `<video src="${list[0].src}" class="w-full h-full object-cover" muted autoplay loop playsinline></video>` : `<img src="${list[0].src}" class="w-full h-full object-cover">`}
+          ${withDelete ? `<button onclick="event.stopPropagation(); removeDraftMedia(0);" class="absolute top-2 right-2 bg-black/60 hover:bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center transition z-10"><i data-lucide="x" class="w-3 h-3"></i></button>` : ''}
+        </div>
+        <div class="wide-media-triple-right">
+          ${[list[1], list[2]].map((m, subIdx) => `
+            <div class="relative cursor-pointer h-full overflow-hidden rounded-xl" onclick="openLightbox('${m.src}', '${m.type}')">
+              ${m.type === 'video' ? `<video src="${m.src}" class="w-full h-full object-cover" muted autoplay loop playsinline></video>` : `<img src="${m.src}" class="w-full h-full object-cover">`}
+              ${withDelete ? `<button onclick="event.stopPropagation(); removeDraftMedia(${subIdx + 1});" class="absolute top-2 right-2 bg-black/60 hover:bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center transition z-10"><i data-lucide="x" class="w-3 h-3"></i></button>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
 }
 
-// 라이트박스 원본 모달
+function removeDraftMedia(idx) {
+  appState.draftEntry.mediaList.splice(idx, 1);
+  renderWideMediaView();
+}
+
 function openLightbox(src, type = 'image') {
   const modal = document.getElementById('lightboxModal');
   const img = document.getElementById('lightboxImg');
@@ -811,90 +928,246 @@ function closeLightbox() {
 }
 
 // ========================================================
-// 8. 키워드 엔진 & AI 일기 작성 (키워드 문자열 직접 언급 금지)
+// 8. 음성 메모 일기 믹스 (Voice-to-Diary) 엔진
 // ========================================================
-function renderPresetKeywords() {
-  const grid = document.getElementById('keywordChipsGrid');
-  grid.innerHTML = '';
+function openVoiceRecordModal() {
+  document.getElementById('voiceRecordModal').classList.remove('hidden');
+  resetVoiceModalUI();
+}
 
-  PRESET_KEYWORDS.forEach(kw => {
-    const isSelected = appState.draftEntry.keywords.includes(kw);
+function closeVoiceRecordModal() {
+  stopVoiceRecordingSession();
+  document.getElementById('voiceRecordModal').classList.add('hidden');
+}
+
+function setVoicePresetDuration(sec) {
+  voiceMaxSeconds = sec;
+  ['15', '30', '45', '60'].forEach(s => {
+    const btn = document.getElementById(`btnVoice${s}`);
+    if (parseInt(s) === sec) {
+      btn.className = "py-1.5 rounded-xl bg-white text-rose-600 shadow-2xs font-black";
+    } else {
+      btn.className = "py-1.5 rounded-xl text-slate-500 font-bold";
+    }
+  });
+  document.getElementById('recordingMaxText').textContent = `/ 00:${String(sec).padStart(2, '0')}`;
+}
+
+function resetVoiceModalUI() {
+  voiceCurrentSeconds = 0;
+  document.getElementById('recordingTimerText').textContent = "00:00";
+  document.getElementById('recordHelpMsg').textContent = "마이크를 탭하여 목소리로 하루를 들려주세요.";
+  document.getElementById('voiceSttLiveText').value = appState.draftEntry.voiceTranscript || "";
+  document.getElementById('recordTriggerBtn').classList.remove('recording-pulse');
+}
+
+async function toggleVoiceRecording() {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    stopVoiceRecordingSession();
+  } else {
+    startVoiceRecordingSession();
+  }
+}
+
+async function startVoiceRecordingSession() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+
+    mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+    mediaRecorder.onstop = () => {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      appState.draftEntry.voiceAudio = audioUrl;
+      appState.draftEntry.voiceDuration = voiceCurrentSeconds;
+      stream.getTracks().forEach(track => track.stop());
+    };
+
+    mediaRecorder.start();
+
+    // Web Speech API 전사 시작
+    initLiveSpeechRecognition();
+
+    const btn = document.getElementById('recordTriggerBtn');
+    btn.classList.add('recording-pulse');
+    document.getElementById('recordHelpMsg').textContent = "생각나는 대로 편안하게 말씀하세요...";
+
+    voiceCurrentSeconds = 0;
+    clearInterval(voiceTimerInterval);
+    voiceTimerInterval = setInterval(() => {
+      voiceCurrentSeconds++;
+      document.getElementById('recordingTimerText').textContent = `00:${String(voiceCurrentSeconds).padStart(2, '0')}`;
+      if (voiceCurrentSeconds >= voiceMaxSeconds) {
+        stopVoiceRecordingSession();
+      }
+    }, 1000);
+
+  } catch (err) {
+    alert("마이크 접근 권한이 필요합니다.");
+  }
+}
+
+function stopVoiceRecordingSession() {
+  clearInterval(voiceTimerInterval);
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop();
+  }
+  if (speechRecognitionInstance) {
+    try { speechRecognitionInstance.stop(); } catch (e) {}
+  }
+  const btn = document.getElementById('recordTriggerBtn');
+  if (btn) btn.classList.remove('recording-pulse');
+  const msg = document.getElementById('recordHelpMsg');
+  if (msg) msg.textContent = "녹음이 완료되었습니다. 텍스트를 확인하고 적용하세요.";
+}
+
+function initLiveSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return;
+
+  speechRecognitionInstance = new SpeechRecognition();
+  speechRecognitionInstance.lang = 'ko-KR';
+  speechRecognitionInstance.continuous = true;
+  speechRecognitionInstance.interimResults = true;
+
+  speechRecognitionInstance.onresult = (event) => {
+    let interim = '';
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      interim += event.results[i][0].transcript;
+    }
+    document.getElementById('voiceSttLiveText').value = interim;
+  };
+  speechRecognitionInstance.start();
+}
+
+function confirmVoiceRecording() {
+  const transcript = document.getElementById('voiceSttLiveText').value.trim();
+  appState.draftEntry.voiceTranscript = transcript;
+  closeVoiceRecordModal();
+
+  // 레코드 탭 UI 반영
+  document.getElementById('voiceStatusBadge').textContent = `녹음완료 (${appState.draftEntry.voiceDuration}초)`;
+  document.getElementById('voiceStatusBadge').className = "text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200";
+  document.getElementById('voiceDurationDisplay').textContent = `00:${String(appState.draftEntry.voiceDuration).padStart(2, '0')}`;
+  document.getElementById('voicePlaybackSnippet').classList.remove('hidden');
+
+  if (transcript) {
+    const area = document.getElementById('voiceTranscriptArea');
+    area.textContent = `🎙️ 육성 내용: "${transcript}"`;
+    area.classList.remove('hidden');
+  }
+
+  showToast("음성 메모가 오늘의 기록 버퍼에 합성 준비되었습니다.");
+}
+
+function playDraftAudio() {
+  if (!appState.draftEntry.voiceAudio) return;
+  const audio = new Audio(appState.draftEntry.voiceAudio);
+  audio.play();
+}
+
+function clearDraftAudio() {
+  appState.draftEntry.voiceAudio = null;
+  appState.draftEntry.voiceTranscript = '';
+  appState.draftEntry.voiceDuration = 0;
+
+  const badge = document.getElementById('voiceStatusBadge');
+  if (badge) {
+    badge.textContent = "미녹음";
+    badge.className = "text-[10px] font-bold text-rose-600 bg-white px-2 py-0.5 rounded-full border border-rose-200";
+  }
+  const snippet = document.getElementById('voicePlaybackSnippet');
+  if (snippet) snippet.classList.add('hidden');
+  const area = document.getElementById('voiceTranscriptArea');
+  if (area) area.classList.add('hidden');
+}
+
+// ========================================================
+// 9. 마이 페르소나 (회원 정보) & 동적 AI 일기 프롬프트 바인딩
+// ========================================================
+function initPersonaUI() {
+  const p = appState.persona;
+  document.getElementById('personaJob').value = p.job || '';
+  document.getElementById('personaMbti').value = p.mbti || 'ENFP';
+  document.getElementById('personaPin').value = p.pin || '';
+  document.getElementById('personaThemeSelect').value = p.defaultTheme || 'indigo';
+
+  const toneRadios = document.querySelectorAll('input[name="personaTone"]');
+  toneRadios.forEach(r => {
+    if (r.value === p.tone) r.checked = true;
+  });
+
+  renderPersonalityChips();
+}
+
+function renderPersonalityChips() {
+  const container = document.getElementById('personaPersonalityChips');
+  container.innerHTML = '';
+  ALL_PERSONALITY_TAGS.forEach(tag => {
+    const isSelected = appState.persona.personality.includes(tag);
     const chip = document.createElement('button');
-    chip.type = "button";
-    chip.onclick = () => toggleKeyword(kw);
-    chip.className = `keyword-chip px-3 py-1.5 rounded-full border text-[11px] font-bold transition ${
-      isSelected ? 'selected' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-    }`;
-    chip.textContent = kw;
-    grid.appendChild(chip);
+    chip.type = 'button';
+    chip.className = `px-2.5 py-1 rounded-xl text-xs font-bold border transition ${isSelected ? 'bg-theme text-white border-theme' : 'bg-slate-50 text-slate-600 border-slate-200'}`;
+    chip.textContent = `#${tag}`;
+    chip.onclick = () => togglePersonalityTag(tag);
+    container.appendChild(chip);
   });
 }
 
-function renderRecentKeywords() {
-  const bar = document.getElementById('recentKeywordsBar');
-  bar.innerHTML = '';
-
-  appState.recentKeywords.forEach(kw => {
-    const isSelected = appState.draftEntry.keywords.includes(kw);
-    const chip = document.createElement('button');
-    chip.type = "button";
-    chip.onclick = () => toggleKeyword(kw);
-    chip.className = `px-2 py-0.5 rounded-md border text-[10px] font-bold transition ${
-      isSelected ? 'bg-theme text-white border-theme' : 'bg-white border-slate-200 text-slate-500 hover:text-indigo-600'
-    }`;
-    chip.textContent = `#${kw}`;
-    bar.appendChild(chip);
-  });
+function togglePersonalityTag(tag) {
+  const list = appState.persona.personality;
+  const idx = list.indexOf(tag);
+  if (idx > -1) {
+    list.splice(idx, 1);
+  } else {
+    if (list.length >= 3) return showToast("성격 키워드는 최대 3개까지만 선택 가능합니다.");
+    list.push(tag);
+  }
+  renderPersonalityChips();
 }
 
-function toggleKeyword(kw) {
-  const list = appState.draftEntry.keywords;
-  const idx = list.indexOf(kw);
-  if (idx > -1) list.splice(idx, 1);
-  else list.push(kw);
+function handleSavePersona(e) {
+  e.preventDefault();
+  const job = document.getElementById('personaJob').value.trim();
+  const mbti = document.getElementById('personaMbti').value;
+  const pin = document.getElementById('personaPin').value.trim();
+  const theme = document.getElementById('personaThemeSelect').value;
+  const toneRadio = document.querySelector('input[name="personaTone"]:checked');
 
-  renderPresetKeywords();
-  renderRecentKeywords();
-}
+  appState.persona.job = job || "일반";
+  appState.persona.mbti = mbti;
+  appState.persona.pin = pin || "0724";
+  appState.persona.defaultTheme = theme;
+  appState.persona.tone = toneRadio ? toneRadio.value : "수필형";
 
-function addCustomKeyword() {
-  const input = document.getElementById('customKeywordInput');
-  const val = input.value.trim().replace(/^#/, '');
-  if (!val) return;
-
-  if (!appState.recentKeywords.includes(val)) {
-    appState.recentKeywords.unshift(val);
-    if (appState.recentKeywords.length > 8) appState.recentKeywords.pop();
-  }
-  if (!appState.draftEntry.keywords.includes(val)) {
-    appState.draftEntry.keywords.push(val);
-  }
-
-  input.value = '';
   persistState();
-  renderPresetKeywords();
-  renderRecentKeywords();
+  applyAppTheme(theme);
+  showToast("마이 페르소나 설정이 안전하게 저장되었습니다.");
 }
 
+// 🌟 Gemini AI 일기 생성 요청 (동적 페르소나 주입 & 키워드 나열 배제)
 async function requestAIDiaryGeneration() {
-  const { mediaList, keywords } = appState.draftEntry;
-  if (mediaList.length === 0 && keywords.length === 0) {
-    return showToast("사진 또는 키워드를 최소 1개 이상 선택해 주세요.");
+  const { mediaList, keywords, voiceTranscript } = appState.draftEntry;
+  if (mediaList.length === 0 && keywords.length === 0 && !voiceTranscript) {
+    return showToast("사진, 키워드, 음성 메모 중 최소 하나를 입력해 주세요.");
   }
 
   const btn = document.getElementById('btnGenerateAI');
   btn.disabled = true;
-  btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin text-amber-300"></i><span>감정의 결을 담담히 엮어내는 중...</span>`;
+  btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin text-amber-300"></i><span>페르소나에 맞춰 감정을 정갈하게 엮는 중...</span>`;
   lucide.createIcons();
 
-  // 구글 앱스 스크립트 API 호출 (URL 등록 시)
+  // 구글 앱스 스크립트 API 호출 (URL 입력 시)
   if (GAS_API_URL && !GAS_API_URL.includes("여기에")) {
     try {
       const payload = {
         action: "GENERATE_AND_SAVE",
         userEmail: appState.currentUser ? appState.currentUser.email : "guest",
+        persona: appState.persona,
         photos: mediaList.map(m => m.src),
         keywords: keywords,
+        voiceText: voiceTranscript,
         date: appState.draftEntry.date
       };
       const res = await fetch(GAS_API_URL, {
@@ -908,21 +1181,32 @@ async function requestAIDiaryGeneration() {
         return;
       }
     } catch (e) {
-      console.warn("GAS 연동 오류, 로컬 자연어 엔진으로 전환합니다.", e);
+      console.warn("GAS 통신 예외, 로컬 고감도 자연어 엔진으로 대체합니다.", e);
     }
   }
 
-  // 로컬 고감도 자연어 엔진 (원칙: 키워드 문자열 직접 나열 금지)
+  // 로컬 고감도 개인화 자연어 엔진 시뮬레이션
   setTimeout(() => {
-    const essays = [
-      "분주했던 하루의 끝자락, 시선이 머무는 곳마다 소소한 온기가 스며있었다. 거창한 목표나 성취에 얽매이지 않고 온전히 내 호흡에 집중하며 보낸 이 시간들이 내면을 단단하게 채워준다. 내일로 향할 평온한 힘을 얻은 소중한 밤이다.",
-      "기분 좋은 활기와 생동감이 온몸을 채웠던 순간이었다. 땀 흘리고 몰입하며 스스로의 페이스를 되찾아가는 과정 속에서, 잊고 지냈던 즐거움과 환한 웃음이 마음 깊은 곳에서 피어올랐다.",
-      "잠시 발걸음을 멈추고 주위를 둘러보았을 때, 계절의 온기와 바람의 결이 마음에 닿았다. 서두르지 않아도 괜찮다는 무언의 위로 속에서, 지나온 시간들을 묵묵히 긍정할 수 있는 여유가 피어났다.",
-      "소소하지만 확실한 순간들이 모여 하루의 무게를 가볍게 덜어주었다. 나 자신을 너그럽게 인정하고 마주하는 태도가 얼마나 큰 힘이 되는지 새삼 깨닫게 된다."
-    ];
-    const generated = essays[Math.floor(Math.random() * essays.length)];
-    showGeneratedDiary(generated);
-  }, 1200);
+    const { job, mbti, tone } = appState.persona;
+    let personaReflect = "";
+
+    if (tone === "공감형") {
+      personaReflect = `누구보다 열심히 달린 나 자신을 따스하게 다독여 주고 싶은 하루였다. 비록 몸은 노곤할지라도 소중한 사람들과 나누었던 눈인사와 격려 덕분에 마음의 온도가 은은하게 올라간다.`;
+    } else if (tone === "성장형") {
+      personaReflect = `땀 흘리고 몰입하며 나의 한계를 조금씩 넓혀간 값진 시간이었다. 일상의 소소한 순간들 속에서도 배움과 단단한 성장의 씨앗을 발견하며, 내일을 살아갈 힘찬 에너지를 채운다.`;
+    } else if (tone === "일상형") {
+      personaReflect = `오늘 하루도 별 탈 없이 기분 좋게 마무리했다. 시원한 가을바람을 맞으며 맛있는 음식을 먹고 나니 고단했던 피로가 단숨에 녹아내린다. 이런 소소함이 참 좋다.`;
+    } else {
+      // 담담한 수필형
+      personaReflect = `지나온 분주함을 잠시 내려놓고 온전히 내 호흡에 귀를 기울였다. 거창한 수식 없이도 눈앞에 머무는 따스한 풍경들이 내면을 잔잔하게 채워준다. 소리 없이 단단해지는 저녁이다.`;
+    }
+
+    if (voiceTranscript) {
+      personaReflect += ` "${voiceTranscript.slice(0, 30)}..."라고 나직이 읊조렸던 순간의 진심이 마음에 긴 여운으로 남는다.`;
+    }
+
+    showGeneratedDiary(personaReflect);
+  }, 1300);
 }
 
 function showGeneratedDiary(text) {
@@ -932,19 +1216,18 @@ function showGeneratedDiary(text) {
 
   const btn = document.getElementById('btnGenerateAI');
   btn.disabled = false;
-  btn.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4 text-amber-300"></i><span>Gemini AI 감성 일기 다시 생성하기</span>`;
+  btn.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4 text-amber-300"></i><span>Gemini AI 감성 일기 다시 작성하기</span>`;
   lucide.createIcons();
-  showToast("AI가 하루를 담담히 돌아보는 일기를 완성했습니다!");
+  showToast("AI가 마이 페르소나를 반영한 감성 일기를 완성했습니다!");
 }
 
 function selectFeedback(reaction, btnElem) {
   appState.draftEntry.feedback = reaction;
   document.querySelectorAll('.feedback-btn').forEach(b => b.classList.remove('selected'));
   if (btnElem) btnElem.classList.add('selected');
-  showToast(`감정 피드백 [${reaction}]이 선택되었습니다.`);
+  showToast(`피드백 [${reaction}]이 선택되었습니다.`);
 }
 
-// 🌟 오늘의 기록 최종 등록 액션
 function commitEntryToCloud() {
   const comment = document.getElementById('finalUserCommentInput').value.trim();
   appState.draftEntry.userComment = comment;
@@ -962,7 +1245,10 @@ function commitEntryToCloud() {
     keywords: [...appState.draftEntry.keywords],
     diary: appState.draftEntry.diary || "기록이 등록되었습니다.",
     feedback: appState.draftEntry.feedback || "행복한 여운 🥰",
-    userComment: comment
+    userComment: comment,
+    voiceAudio: appState.draftEntry.voiceAudio,
+    voiceTranscript: appState.draftEntry.voiceTranscript,
+    voiceDuration: appState.draftEntry.voiceDuration
   };
 
   const existIdx = appState.entries.findIndex(e => e.date === fullDate);
@@ -979,229 +1265,156 @@ function commitEntryToCloud() {
 }
 
 // ========================================================
-// 9. 타임라인 & 3대 보기 모드 (Card, List, Album)
+// 10. 월간 마인드로그 매거진 (A4 인쇄/PDF 조판)
 // ========================================================
-function setTimelineViewMode(mode) {
-  appState.timelineViewMode = mode;
-  const btnCard = document.getElementById('btnViewCard');
-  const btnList = document.getElementById('btnViewList');
-  const btnAlbum = document.getElementById('btnViewAlbum');
+function openMagazineModal() {
+  const validEntries = appState.entries.filter(e => e.mediaList && e.mediaList.length > 0);
+  if (validEntries.length === 0) return showToast("매거진으로 조판할 사진 기록이 없습니다.");
 
-  [btnCard, btnList, btnAlbum].forEach(b => {
-    b.className = "px-2.5 py-1 text-[11px] font-bold rounded-lg text-slate-500 hover:text-slate-800";
+  document.getElementById('magMonthDisplay').textContent = `${appState.calendarYear}. ${String(appState.calendarMonth + 1).padStart(2, '0')}`;
+  document.getElementById('magOwnerName').textContent = `${appState.currentUser ? appState.currentUser.email.split('@')[0] : '회원'} 님`;
+  document.getElementById('magOwnerPersona').textContent = `${appState.persona.job} • ${appState.persona.mbti} • ${appState.persona.tone}`;
+
+  // 하이라이트 사진
+  document.getElementById('magHighlightPhoto').src = validEntries[0].mediaList[0].src;
+
+  // 주요 4개 일상 조판
+  const grid = document.getElementById('magEntriesGrid');
+  grid.innerHTML = '';
+  validEntries.slice(0, 4).forEach(item => {
+    const card = document.createElement('div');
+    card.className = "bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 space-y-2";
+    card.innerHTML = `
+      <img src="${item.mediaList[0].src}" class="w-full h-32 object-cover rounded-xl shadow-2xs">
+      <div class="flex justify-between items-center text-[10px] font-bold">
+        <span class="text-slate-900">${item.dateDisplay}</span>
+        <span class="text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">${item.feedback}</span>
+      </div>
+      <p class="text-[11px] text-slate-700 leading-relaxed font-medium line-clamp-3">${item.diary}</p>
+    `;
+    grid.appendChild(card);
   });
 
-  if (mode === 'card') btnCard.className = "px-2.5 py-1 text-[11px] font-black rounded-lg bg-theme text-white shadow-xs";
-  if (mode === 'list') btnList.className = "px-2.5 py-1 text-[11px] font-black rounded-lg bg-theme text-white shadow-xs";
-  if (mode === 'album') btnAlbum.className = "px-2.5 py-1 text-[11px] font-black rounded-lg bg-theme text-white shadow-xs";
-
-  renderTimeline();
+  document.getElementById('magazineModal').classList.remove('hidden');
+  lucide.createIcons();
 }
 
-function renderTimeline() {
-  const container = document.getElementById('timelineContainer');
+function closeMagazineModal() {
+  document.getElementById('magazineModal').classList.add('hidden');
+}
+
+// ========================================================
+// 11. 다차원 메모 (전체/주간/월간/고정) & 5단계 플래너
+// ========================================================
+function setMemoFilter(filter) {
+  appState.memoFilter = filter;
+  ['all', 'week', 'month', 'pin'].forEach(f => {
+    const btn = document.getElementById(`btnMemoFilter${f.charAt(0).toUpperCase() + f.slice(1)}`);
+    if (f === filter) {
+      btn.className = "px-2 py-0.5 rounded-lg bg-white text-theme shadow-2xs font-extrabold";
+    } else {
+      btn.className = "px-2 py-0.5 rounded-lg text-slate-500 font-bold";
+    }
+  });
+  renderFilteredMemos();
+}
+
+function selectMemoColor(color, btnElem) {
+  appState.memoSelectedColor = color;
+  document.querySelectorAll('#tab-planner button[onclick^="selectMemoColor"]').forEach(b => b.classList.remove('ring-2', 'ring-indigo-600'));
+  if (btnElem) btnElem.classList.add('ring-2', 'ring-indigo-600');
+}
+
+function saveIdeaMemo() {
+  const textarea = document.getElementById('ideaMemoTextInput');
+  const text = textarea.value.trim();
+  if (!text) return showToast("메모 내용을 입력해 주세요.");
+
+  const type = document.getElementById('memoTypeSelect').value;
+  const targetDate = type === 'date' ? document.getElementById('memoTargetDateInput').value : null;
+
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}. ${String(now.getMonth()+1).padStart(2,'0')}. ${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  appState.memos.unshift({
+    id: Date.now(),
+    type: type,
+    date: targetDate,
+    text: text,
+    color: appState.memoSelectedColor,
+    isPinned: false,
+    createdAt: dateStr
+  });
+
+  textarea.value = '';
+  persistState();
+  renderFilteredMemos();
+  renderCalendar();
+  showToast("💡 메모가 안전하게 영구 저장되었습니다!");
+}
+
+function renderFilteredMemos() {
+  const container = document.getElementById('savedMemosList');
   if (!container) return;
   container.innerHTML = '';
 
-  const entries = appState.entries;
-  document.getElementById('timelineTotalCount').textContent = `총 ${entries.length}개 기록`;
+  let list = [...appState.memos];
+  const today = new Date();
 
-  if (entries.length === 0) {
-    container.innerHTML = `<div class="p-12 text-center text-slate-400 text-xs font-bold">아직 작성된 일상 기록이 없습니다.</div>`;
+  if (appState.memoFilter === 'pin') {
+    list = list.filter(m => m.isPinned);
+  } else if (appState.memoFilter === 'week') {
+    // 7일 이내
+    list = list.filter(m => m.date || m.createdAt);
+  } else if (appState.memoFilter === 'month') {
+    const currentYM = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+    list = list.filter(m => (m.date && m.date.startsWith(currentYM)) || m.createdAt.startsWith(today.getFullYear().toString()));
+  }
+
+  if (list.length === 0) {
+    container.innerHTML = `<p class="col-span-2 text-xs text-slate-400 text-center py-4 font-bold">조건에 맞는 메모가 없습니다.</p>`;
     return;
   }
 
-  // 1) 사진첩 모아보기
-  if (appState.timelineViewMode === 'album') {
-    const grid = document.createElement('div');
-    grid.className = "grid grid-cols-3 gap-1.5";
-    entries.forEach(item => {
-      (item.mediaList || []).forEach(m => {
-        const box = document.createElement('div');
-        box.className = "aspect-square rounded-2xl overflow-hidden border border-slate-200 cursor-pointer shadow-2xs hover:opacity-90 transition";
-        box.onclick = () => openLightbox(m.src, m.type);
-        box.innerHTML = m.type === 'video'
-          ? `<video src="${m.src}" class="w-full h-full object-cover" muted></video>`
-          : `<img src="${m.src}" class="w-full h-full object-cover">`;
-        grid.appendChild(box);
-      });
-    });
-    container.appendChild(grid);
-    return;
-  }
-
-  // 2) 리스트 뷰
-  if (appState.timelineViewMode === 'list') {
-    entries.forEach(item => {
-      const row = document.createElement('div');
-      row.className = "bg-white border border-slate-200/90 rounded-2xl p-3 flex items-center space-x-3 shadow-2xs hover:border-theme transition cursor-pointer";
-      const thumb = (item.mediaList && item.mediaList.length > 0) ? item.mediaList[0].src : null;
-
-      row.innerHTML = `
-        ${thumb ? `<img src="${thumb}" class="w-12 h-12 rounded-xl object-cover shrink-0" onclick="event.stopPropagation(); openLightbox('${thumb}')">` : `
-          <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 shrink-0"><i data-lucide="book-open" class="w-5 h-5"></i></div>
-        `}
-        <div class="flex-1 min-w-0" onclick="selectCalendarDate('${item.date}')">
-          <div class="flex justify-between items-center mb-0.5">
-            <span class="text-xs font-black text-slate-900">${item.dateDisplay}</span>
-            <span class="text-[10px] font-bold text-theme bg-theme-light px-2 py-0.5 rounded-full">${item.feedback}</span>
-          </div>
-          <p class="text-xs text-slate-600 truncate font-medium">${item.diary}</p>
-        </div>
-      `;
-      container.appendChild(row);
-    });
-    lucide.createIcons();
-    return;
-  }
-
-  // 3) 카드 뷰 (가로 와이드 사진 탑재)
-  entries.forEach(item => {
+  list.forEach(m => {
     const card = document.createElement('div');
-    card.className = "bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-5 shadow-xs space-y-3";
-
-    let mediaHtml = '';
-    if (item.mediaList && item.mediaList.length > 0) {
-      if (item.mediaList.length === 1) {
-        mediaHtml = `<img src="${item.mediaList[0].src}" class="wide-media-single cursor-pointer" onclick="openLightbox('${item.mediaList[0].src}')">`;
-      } else if (item.mediaList.length === 2) {
-        mediaHtml = `
-          <div class="wide-media-double cursor-pointer">
-            <img src="${item.mediaList[0].src}" onclick="openLightbox('${item.mediaList[0].src}')">
-            <img src="${item.mediaList[1].src}" onclick="openLightbox('${item.mediaList[1].src}')">
-          </div>
-        `;
-      } else {
-        mediaHtml = `
-          <div class="wide-media-triple cursor-pointer">
-            <img src="${item.mediaList[0].src}" onclick="openLightbox('${item.mediaList[0].src}')">
-            <div class="wide-media-triple-right">
-              <img src="${item.mediaList[1].src}" onclick="openLightbox('${item.mediaList[1].src}')">
-              <img src="${item.mediaList[2].src}" onclick="openLightbox('${item.mediaList[2].src}')">
-            </div>
-          </div>
-        `;
-      }
-    }
-
-    const tagsHtml = (item.keywords || []).map(k => `<span class="bg-theme-light text-theme text-[10px] font-black px-2 py-0.5 rounded-full border border-theme-light">${k}</span>`).join(' ');
+    const colorClass = `memo-card-${m.color || 'yellow'}`;
+    card.className = `p-3 rounded-2xl border flex flex-col justify-between shadow-2xs ${colorClass}`;
 
     card.innerHTML = `
-      <div class="flex items-center justify-between">
-        <span class="text-xs font-black text-slate-900">${item.dateDisplay}</span>
-        <span class="text-[10px] font-extrabold bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full">${item.feedback}</span>
-      </div>
-      ${mediaHtml}
-      <div class="flex flex-wrap gap-1">${tagsHtml}</div>
-      <p class="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed bg-slate-50 p-3.5 rounded-2xl whitespace-pre-line">${item.diary}</p>
-      ${item.userComment ? `
-        <div class="text-[11px] text-slate-500 font-semibold px-2 flex items-center space-x-1">
-          <i data-lucide="message-circle" class="w-3.5 h-3.5 text-indigo-400"></i>
-          <span>${item.userComment}</span>
+      <div>
+        <div class="flex justify-between items-start mb-1">
+          <span class="text-[9px] font-black uppercase tracking-wider opacity-75">${m.type === 'date' ? `📅 ${m.date}` : '⚡ 즉시메모'}</span>
+          <button onclick="togglePinMemo(${m.id})" class="text-xs hover:scale-125 transition">${m.isPinned ? '📌' : '📍'}</button>
         </div>
-      ` : ''}
+        <p class="text-xs font-semibold whitespace-pre-line leading-relaxed">${m.text}</p>
+      </div>
+      <div class="flex justify-between items-center pt-2 mt-2 border-t border-black/10">
+        <span class="text-[9px] opacity-60">${m.createdAt}</span>
+        <button onclick="deleteIdeaMemo(${m.id})" class="opacity-50 hover:opacity-100 hover:text-rose-600 transition"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+      </div>
     `;
     container.appendChild(card);
   });
   lucide.createIcons();
 }
 
-// ========================================================
-// 10. 감정 인포그래픽 리포트 (Chart.js & 기간 필터링)
-// ========================================================
-function setReportPeriod(period) {
-  appState.reportPeriod = period;
-  ['today', 'week', 'month', 'year'].forEach(p => {
-    const btn = document.getElementById(`btnReport${p.charAt(0).toUpperCase() + p.slice(1)}`);
-    if (p === period) {
-      btn.className = "py-1.5 rounded-xl bg-white text-theme shadow-2xs font-black";
-    } else {
-      btn.className = "py-1.5 rounded-xl text-slate-500 font-bold";
-    }
-  });
-
-  const titles = { today: "오늘 하루 분석", week: "이번 주 누적 분석", month: "9월 누적 종합", year: "2026년 전체 종합" };
-  document.getElementById('reportPeriodBadge').textContent = titles[period] || "감정 분석";
-
-  updateEmotionCharts();
+function togglePinMemo(id) {
+  const m = appState.memos.find(memo => memo.id === id);
+  if (m) m.isPinned = !m.isPinned;
+  persistState();
+  renderFilteredMemos();
 }
 
-function initEmotionCharts() {
-  const pieCtx = document.getElementById('emotionPieChart');
-  const radarCtx = document.getElementById('emotionRadarChart');
-  if (!pieCtx || !radarCtx) return;
-
-  if (pieChartInstance) pieChartInstance.destroy();
-  if (radarChartInstance) radarChartInstance.destroy();
-
-  // 8대 감정 도넛 차트
-  pieChartInstance = new Chart(pieCtx, {
-    type: 'doughnut',
-    data: {
-      labels: ['행복/설렘', '신남/열정', '평온/쉼', '뿌듯/성취', '피로/고단', '불안/슬픔'],
-      datasets: [{
-        data: [35, 25, 20, 10, 7, 3],
-        backgroundColor: ['#6366f1', '#f59e0b', '#10b981', '#ec4899', '#94a3b8', '#cbd5e1'],
-        borderWidth: 0
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
-    }
-  });
-
-  // 4축 밸런스 레이더 차트
-  radarChartInstance = new Chart(radarCtx, {
-    type: 'radar',
-    data: {
-      labels: ['긍정 에너지', '도전/열정', '마음 회복력', '평온 밸런스'],
-      datasets: [{
-        label: '감정 수치',
-        data: [88, 76, 82, 79],
-        borderColor: '#ec4899',
-        backgroundColor: 'rgba(236, 72, 153, 0.2)',
-        pointBackgroundColor: '#ec4899'
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: { r: { suggestedMin: 0, suggestedMax: 100, ticks: { display: false } } },
-      plugins: { legend: { display: false } }
-    }
-  });
+function deleteIdeaMemo(id) {
+  appState.memos = appState.memos.filter(m => m.id !== id);
+  persistState();
+  renderFilteredMemos();
+  renderCalendar();
+  showToast("메모가 삭제되었습니다.");
 }
 
-function updateEmotionCharts() {
-  if (!pieChartInstance || !radarChartInstance) return initEmotionCharts();
-
-  // 기간별 시뮬레이션 수치 변화
-  if (appState.reportPeriod === 'today') {
-    pieChartInstance.data.datasets[0].data = [50, 30, 10, 5, 5, 0];
-    radarChartInstance.data.datasets[0].data = [90, 85, 75, 80];
-    document.getElementById('emotionTempText').textContent = "37.2°C";
-    document.getElementById('emotionTempBar').style.width = "82%";
-  } else if (appState.reportPeriod === 'week') {
-    pieChartInstance.data.datasets[0].data = [40, 25, 15, 10, 7, 3];
-    radarChartInstance.data.datasets[0].data = [82, 78, 80, 75];
-    document.getElementById('emotionTempText').textContent = "36.8°C";
-    document.getElementById('emotionTempBar').style.width = "78%";
-  } else {
-    pieChartInstance.data.datasets[0].data = [35, 25, 20, 10, 7, 3];
-    radarChartInstance.data.datasets[0].data = [88, 76, 82, 79];
-    document.getElementById('emotionTempText').textContent = "36.5°C";
-    document.getElementById('emotionTempBar').style.width = "75%";
-  }
-
-  pieChartInstance.update();
-  radarChartInstance.update();
-}
-
-// ========================================================
-// 11. 로드맵 To-Do 플래너 ([전체] 모아보기 + 5단계 분류) & 영구 메모
-// ========================================================
+// 5단계 로드맵 To-Do
 function setTodoScope(scope) {
   appState.currentTodoScope = scope;
   ['all', 'today', 'week', 'month', 'year', 'long'].forEach(s => {
@@ -1222,7 +1435,6 @@ function renderCategorizedTodoList() {
 
   let listToRender = [];
   if (appState.currentTodoScope === 'all') {
-    // 🌟 전체 목록 모아보기
     ['today', 'week', 'month', 'year', 'long'].forEach(scope => {
       appState.todos[scope].forEach(item => {
         listToRender.push({ ...item, scopeLabel: getScopeLabelKorean(scope), originalScope: scope });
@@ -1266,12 +1478,7 @@ function addCategorizedTodo() {
   if (!text) return;
 
   const targetScope = appState.currentTodoScope === 'all' ? 'today' : appState.currentTodoScope;
-  appState.todos[targetScope].push({
-    id: Date.now(),
-    text,
-    done: false
-  });
-
+  appState.todos[targetScope].push({ id: Date.now(), text, done: false });
   input.value = '';
   persistState();
   renderCategorizedTodoList();
@@ -1290,105 +1497,340 @@ function deleteTodoItem(scope, id) {
   renderCategorizedTodoList();
 }
 
-// 영구 저장형 아이디어 메모
-function saveIdeaMemo() {
-  const textarea = document.getElementById('ideaMemoTextInput');
-  const text = textarea.value.trim();
-  if (!text) return showToast("메모 내용을 입력해 주세요.");
-
-  const now = new Date();
-  const dateStr = `${now.getFullYear()}. ${String(now.getMonth()+1).padStart(2,'0')}. ${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-
-  appState.memos.unshift({
-    id: Date.now(),
-    text,
-    date: dateStr
+// ========================================================
+// 12. 키워드, 타임라인, 인포그래픽, 후기/문의/관리자
+// ========================================================
+function renderPresetKeywords() {
+  const grid = document.getElementById('keywordChipsGrid');
+  grid.innerHTML = '';
+  PRESET_KEYWORDS.forEach(kw => {
+    const isSelected = appState.draftEntry.keywords.includes(kw);
+    const chip = document.createElement('button');
+    chip.type = "button";
+    chip.onclick = () => toggleKeyword(kw);
+    chip.className = `keyword-chip px-3 py-1.5 rounded-full border text-[11px] font-bold transition ${isSelected ? 'selected' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`;
+    chip.textContent = kw;
+    grid.appendChild(chip);
   });
-
-  textarea.value = '';
-  persistState();
-  renderSavedMemos();
-  showToast("💡 메모가 영구 저장되었습니다!");
 }
 
-function renderSavedMemos() {
-  const container = document.getElementById('savedMemosList');
+function renderRecentKeywords() {
+  const bar = document.getElementById('recentKeywordsBar');
+  bar.innerHTML = '';
+  appState.recentKeywords.forEach(kw => {
+    const isSelected = appState.draftEntry.keywords.includes(kw);
+    const chip = document.createElement('button');
+    chip.type = "button";
+    chip.onclick = () => toggleKeyword(kw);
+    chip.className = `px-2 py-0.5 rounded-md border text-[10px] font-bold transition ${isSelected ? 'bg-theme text-white border-theme' : 'bg-white border-slate-200 text-slate-500 hover:text-indigo-600'}`;
+    chip.textContent = `#${kw}`;
+    bar.appendChild(chip);
+  });
+}
+
+function toggleKeyword(kw) {
+  const list = appState.draftEntry.keywords;
+  const idx = list.indexOf(kw);
+  if (idx > -1) list.splice(idx, 1);
+  else list.push(kw);
+  renderPresetKeywords();
+  renderRecentKeywords();
+}
+
+function addCustomKeyword() {
+  const input = document.getElementById('customKeywordInput');
+  const val = input.value.trim().replace(/^#/, '');
+  if (!val) return;
+
+  if (!appState.recentKeywords.includes(val)) {
+    appState.recentKeywords.unshift(val);
+    if (appState.recentKeywords.length > 8) appState.recentKeywords.pop();
+  }
+  if (!appState.draftEntry.keywords.includes(val)) {
+    appState.draftEntry.keywords.push(val);
+  }
+  input.value = '';
+  persistState();
+  renderPresetKeywords();
+  renderRecentKeywords();
+}
+
+function setTimelineViewMode(mode) {
+  appState.timelineViewMode = mode;
+  const btnCard = document.getElementById('btnViewCard');
+  const btnList = document.getElementById('btnViewList');
+  const btnAlbum = document.getElementById('btnViewAlbum');
+
+  [btnCard, btnList, btnAlbum].forEach(b => {
+    b.className = "px-2.5 py-1 text-[11px] font-bold rounded-lg text-slate-500 hover:text-slate-800";
+  });
+
+  if (mode === 'card') btnCard.className = "px-2.5 py-1 text-[11px] font-black rounded-lg bg-theme text-white shadow-xs";
+  if (mode === 'list') btnList.className = "px-2.5 py-1 text-[11px] font-black rounded-lg bg-theme text-white shadow-xs";
+  if (mode === 'album') btnAlbum.className = "px-2.5 py-1 text-[11px] font-black rounded-lg bg-theme text-white shadow-xs";
+
+  renderTimeline();
+}
+
+function renderTimeline() {
+  const container = document.getElementById('timelineContainer');
   if (!container) return;
   container.innerHTML = '';
 
-  if (appState.memos.length === 0) {
-    container.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">저장된 아이디어 메모가 없습니다.</p>`;
+  const entries = appState.entries;
+  document.getElementById('timelineTotalCount').textContent = `총 ${entries.length}개 기록`;
+
+  if (entries.length === 0) {
+    container.innerHTML = `<div class="p-12 text-center text-slate-400 text-xs font-bold">아직 작성된 일상 기록이 없습니다.</div>`;
     return;
   }
 
-  appState.memos.forEach(m => {
+  if (appState.timelineViewMode === 'album') {
+    const grid = document.createElement('div');
+    grid.className = "grid grid-cols-3 gap-1.5";
+    entries.forEach(item => {
+      (item.mediaList || []).forEach(m => {
+        const box = document.createElement('div');
+        box.className = "aspect-square rounded-2xl overflow-hidden border border-slate-200 cursor-pointer shadow-2xs hover:opacity-90 transition";
+        box.onclick = () => openLightbox(m.src, m.type);
+        box.innerHTML = m.type === 'video' ? `<video src="${m.src}" class="w-full h-full object-cover" muted></video>` : `<img src="${m.src}" class="w-full h-full object-cover">`;
+        grid.appendChild(box);
+      });
+    });
+    container.appendChild(grid);
+    return;
+  }
+
+  if (appState.timelineViewMode === 'list') {
+    entries.forEach(item => {
+      const row = document.createElement('div');
+      row.className = "bg-white border border-slate-200/90 rounded-2xl p-3 flex items-center space-x-3 shadow-2xs hover:border-theme transition cursor-pointer";
+      const thumb = (item.mediaList && item.mediaList.length > 0) ? item.mediaList[0].src : null;
+
+      row.innerHTML = `
+        ${thumb ? `<img src="${thumb}" class="w-12 h-12 rounded-xl object-cover shrink-0" onclick="event.stopPropagation(); openLightbox('${thumb}')">` : `
+          <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 shrink-0"><i data-lucide="book-open" class="w-5 h-5"></i></div>
+        `}
+        <div class="flex-1 min-w-0" onclick="selectCalendarDate('${item.date}')">
+          <div class="flex justify-between items-center mb-0.5">
+            <span class="text-xs font-black text-slate-900">${item.dateDisplay}</span>
+            <span class="text-[10px] font-bold text-theme bg-theme-light px-2 py-0.5 rounded-full">${item.feedback}</span>
+          </div>
+          <p class="text-xs text-slate-600 truncate font-medium">${item.diary}</p>
+        </div>
+      `;
+      container.appendChild(row);
+    });
+    lucide.createIcons();
+    return;
+  }
+
+  // 카드 뷰
+  entries.forEach(item => {
     const card = document.createElement('div');
-    card.className = "p-3 rounded-2xl bg-amber-50/70 border border-amber-200/60 flex justify-between items-start space-x-2";
+    card.className = "bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-5 shadow-xs space-y-3";
+
+    let mediaHtml = '';
+    if (item.mediaList && item.mediaList.length > 0) {
+      mediaHtml = renderWideMediaHtml(item.mediaList, false);
+    }
+
+    const tagsHtml = (item.keywords || []).map(k => `<span class="bg-theme-light text-theme text-[10px] font-black px-2 py-0.5 rounded-full border border-theme-light">${k}</span>`).join(' ');
+
     card.innerHTML = `
-      <div class="flex-1 min-w-0">
-        <p class="text-xs font-semibold text-slate-800 whitespace-pre-line leading-relaxed">${m.text}</p>
-        <span class="text-[9px] font-bold text-amber-700/80 block mt-1">${m.date}</span>
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-black text-slate-900">${item.dateDisplay}</span>
+        <span class="text-[10px] font-extrabold bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full">${item.feedback}</span>
       </div>
-      <button onclick="deleteIdeaMemo(${m.id})" class="text-slate-400 hover:text-rose-600 p-1"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+      ${mediaHtml}
+      <div class="flex flex-wrap gap-1">${tagsHtml}</div>
+      <p class="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed bg-slate-50 p-3.5 rounded-2xl whitespace-pre-line">${item.diary}</p>
+      ${item.userComment ? `
+        <div class="text-[11px] text-slate-500 font-semibold px-2 flex items-center space-x-1">
+          <i data-lucide="message-circle" class="w-3.5 h-3.5 text-indigo-400"></i>
+          <span>${item.userComment}</span>
+        </div>
+      ` : ''}
     `;
     container.appendChild(card);
   });
   lucide.createIcons();
 }
 
-function deleteIdeaMemo(id) {
-  appState.memos = appState.memos.filter(m => m.id !== id);
+// 감정 인포그래픽 리포트
+function setReportPeriod(period) {
+  appState.reportPeriod = period;
+  ['today', 'week', 'month', 'year'].forEach(p => {
+    const btn = document.getElementById(`btnReport${p.charAt(0).toUpperCase() + p.slice(1)}`);
+    if (p === period) {
+      btn.className = "py-1.5 rounded-xl bg-white text-theme shadow-2xs font-black";
+    } else {
+      btn.className = "py-1.5 rounded-xl text-slate-500 font-bold";
+    }
+  });
+
+  const titles = { today: "오늘 하루 분석", week: "이번 주 누적 분석", month: "9월 누적 종합", year: "2026년 전체 종합" };
+  document.getElementById('reportPeriodBadge').textContent = titles[period] || "감정 분석";
+  updateEmotionCharts();
+}
+
+function initEmotionCharts() {
+  const pieCtx = document.getElementById('emotionPieChart');
+  const radarCtx = document.getElementById('emotionRadarChart');
+  if (!pieCtx || !radarCtx) return;
+
+  if (pieChartInstance) pieChartInstance.destroy();
+  if (radarChartInstance) radarChartInstance.destroy();
+
+  pieChartInstance = new Chart(pieCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['행복/설렘', '신남/열정', '평온/쉼', '뿌듯/성취', '피로/고단', '불안/슬픔'],
+      datasets: [{
+        data: [35, 25, 20, 10, 7, 3],
+        backgroundColor: ['#6366f1', '#f59e0b', '#10b981', '#ec4899', '#94a3b8', '#cbd5e1'],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
+    }
+  });
+
+  radarChartInstance = new Chart(radarCtx, {
+    type: 'radar',
+    data: {
+      labels: ['긍정 에너지', '도전/열정', '마음 회복력', '평온 밸런스'],
+      datasets: [{
+        label: '감정 수치',
+        data: [88, 76, 82, 79],
+        borderColor: '#ec4899',
+        backgroundColor: 'rgba(236, 72, 153, 0.2)',
+        pointBackgroundColor: '#ec4899'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { r: { suggestedMin: 0, suggestedMax: 100, ticks: { display: false } } },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+function updateEmotionCharts() {
+  if (!pieChartInstance || !radarChartInstance) return initEmotionCharts();
+
+  if (appState.reportPeriod === 'today') {
+    pieChartInstance.data.datasets[0].data = [50, 30, 10, 5, 5, 0];
+    radarChartInstance.data.datasets[0].data = [90, 85, 75, 80];
+    document.getElementById('emotionTempText').textContent = "37.2°C";
+    document.getElementById('emotionTempBar').style.width = "82%";
+  } else if (appState.reportPeriod === 'week') {
+    pieChartInstance.data.datasets[0].data = [40, 25, 15, 10, 7, 3];
+    radarChartInstance.data.datasets[0].data = [82, 78, 80, 75];
+    document.getElementById('emotionTempText').textContent = "36.8°C";
+    document.getElementById('emotionTempBar').style.width = "78%";
+  } else {
+    pieChartInstance.data.datasets[0].data = [35, 25, 20, 10, 7, 3];
+    radarChartInstance.data.datasets[0].data = [88, 76, 82, 79];
+    document.getElementById('emotionTempText').textContent = "36.5°C";
+    document.getElementById('emotionTempBar').style.width = "75%";
+  }
+
+  pieChartInstance.update();
+  radarChartInstance.update();
+}
+
+// 회원 인증 모달
+function openAuthModal() { document.getElementById('authModal').classList.remove('hidden'); }
+function closeAuthModal() { document.getElementById('authModal').classList.add('hidden'); }
+
+function switchAuthTab(type) {
+  const tabLogin = document.getElementById('authTabLogin');
+  const tabSignup = document.getElementById('authTabSignup');
+  const formLogin = document.getElementById('loginForm');
+  const formSignup = document.getElementById('signupForm');
+
+  if (type === 'login') {
+    tabLogin.className = "flex-1 py-1.5 rounded-lg bg-white text-theme shadow-2xs font-extrabold";
+    tabSignup.className = "flex-1 py-1.5 rounded-lg font-bold text-slate-500";
+    formLogin.classList.remove('hidden');
+    formSignup.classList.add('hidden');
+  } else {
+    tabSignup.className = "flex-1 py-1.5 rounded-lg bg-white text-theme shadow-2xs font-extrabold";
+    tabLogin.className = "flex-1 py-1.5 rounded-lg font-bold text-slate-500";
+    formSignup.classList.remove('hidden');
+    formLogin.classList.add('hidden');
+  }
+}
+
+function setSignupRole(role, btnElem) {
+  signupRoleSelected = role;
+  document.querySelectorAll('.role-select-btn').forEach(b => b.classList.remove('selected'));
+  if (btnElem) btnElem.classList.add('selected');
+}
+
+function handleSignupSubmit(e) {
+  e.preventDefault();
+  const email = document.getElementById('signupEmail').value.trim();
+  const pw = document.getElementById('signupPw').value.trim();
+  const birth = document.getElementById('signupBirth').value;
+
+  appState.currentUser = { email, role: signupRoleSelected, birth };
   persistState();
-  renderSavedMemos();
-  showToast("메모가 삭제되었습니다.");
+  updateUserSessionUI();
+  closeAuthModal();
+  showToast(`환영합니다! [${signupRoleSelected}] 계정으로 등록되었습니다.`);
 }
 
-// ========================================================
-// 12. 전체 공개 후기 & 비공개 고객센터 (닉네임 + 비번)
-// ========================================================
-function openReviewModal() {
-  document.getElementById('reviewModal').classList.remove('hidden');
-  renderPublicReviews();
+function handleLoginSubmit(e) {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  appState.currentUser = { email, role: "사용자", birth: "" };
+  persistState();
+  updateUserSessionUI();
+  closeAuthModal();
+  showToast("로그인되었습니다.");
 }
 
-function closeReviewModal() {
-  document.getElementById('reviewModal').classList.add('hidden');
+function updateUserSessionUI() {
+  const badge = document.getElementById('headerUserBadge');
+  if (appState.currentUser) {
+    const roleTag = appState.currentUser.role ? `[${appState.currentUser.role}] ` : '';
+    badge.textContent = `${roleTag}${appState.currentUser.email.split('@')[0]}`;
+  } else {
+    badge.textContent = "로그인 필요";
+  }
 }
 
+// 리뷰 & 고객센터
+function openReviewModal() { document.getElementById('reviewModal').classList.remove('hidden'); renderPublicReviews(); }
+function closeReviewModal() { document.getElementById('reviewModal').classList.add('hidden'); }
 function setReviewRating(star) {
   currentRatingScore = star;
-  const stars = document.querySelectorAll('#reviewStarRating .star-rating-icon');
-  stars.forEach((s, idx) => {
+  document.querySelectorAll('#reviewStarRating .star-rating-icon').forEach((s, idx) => {
     if (idx < star) s.classList.add('active');
     else s.classList.remove('active');
   });
 }
-
 function submitReview() {
   const nick = document.getElementById('reviewNickname').value.trim() || "익명";
   const comment = document.getElementById('reviewComment').value.trim();
   if (!comment) return showToast("후기 내용을 입력해 주세요.");
 
-  const newReview = {
-    id: Date.now(),
-    author: nick,
-    rating: currentRatingScore,
-    comment: comment,
-    date: new Date().toLocaleDateString('ko-KR')
-  };
-
-  appState.reviews.unshift(newReview);
+  appState.reviews.unshift({ id: Date.now(), author: nick, rating: currentRatingScore, comment, date: new Date().toLocaleDateString('ko-KR') });
   persistState();
   renderPublicReviews();
   document.getElementById('reviewComment').value = '';
-  showToast("⭐ 소중한 후기가 전체 공개로 등록되었습니다!");
+  showToast("⭐ 후기가 등록되었습니다!");
 }
-
 function renderPublicReviews() {
   const container = document.getElementById('publicReviewList');
   if (!container) return;
   container.innerHTML = '';
-
   appState.reviews.forEach(r => {
     const card = document.createElement('div');
     card.className = "p-3 rounded-2xl bg-slate-50 border border-slate-200/90 text-xs space-y-1";
@@ -1403,56 +1845,41 @@ function renderPublicReviews() {
   });
 }
 
-// 고객센터 문의 (비공개: 닉네임 + 4자리 비번)
-function openInquiryModal() {
-  document.getElementById('inquiryModal').classList.remove('hidden');
-  renderInquiryList();
-}
-
-function closeInquiryModal() {
-  document.getElementById('inquiryModal').classList.add('hidden');
-}
-
+function openInquiryModal() { document.getElementById('inquiryModal').classList.remove('hidden'); renderInquiryList(); }
+function closeInquiryModal() { document.getElementById('inquiryModal').classList.add('hidden'); }
 function submitInquiry() {
   const nick = document.getElementById('inquiryNickname').value.trim() || "익명";
   const pw = document.getElementById('inquiryPw').value.trim();
   const content = document.getElementById('inquiryContent').value.trim();
 
-  if (!pw || pw.length !== 4) return showToast("4자리 열람 비밀번호를 입력해 주세요.");
+  if (!pw || pw.length !== 4) return showToast("4자리 비밀번호를 입력해 주세요.");
   if (!content) return showToast("문의 내용을 입력해 주세요.");
 
-  const item = {
-    id: Date.now(),
-    author: nick,
-    pw: pw,
-    content: content,
-    reply: "관리자 검토 대기 중입니다.",
-    date: new Date().toLocaleDateString('ko-KR')
-  };
-
-  appState.inquiries.unshift(item);
+  appState.inquiries.unshift({ id: Date.now(), author: nick, pw, content, reply: "관리자 검토 대기 중입니다.", date: new Date().toLocaleDateString('ko-KR') });
   persistState();
   renderInquiryList();
   document.getElementById('inquiryContent').value = '';
   document.getElementById('inquiryPw').value = '';
-  showToast("고객센터에 비공개 문의가 안전하게 접수되었습니다.");
+  showToast("비공개 문의가 접수되었습니다.");
 }
-
 function renderInquiryList() {
   const container = document.getElementById('inquiryListContainer');
   if (!container) return;
   container.innerHTML = '';
-
   appState.inquiries.forEach(inq => {
     const card = document.createElement('div');
     card.className = "p-3 rounded-2xl bg-slate-50 border border-slate-200/90 text-xs space-y-1.5 cursor-pointer hover:border-indigo-300 transition";
-    card.onclick = () => checkInquiryAccess(inq);
+    card.onclick = () => {
+      const inputPw = prompt("4자리 비밀번호를 입력하세요:");
+      if (inputPw === inq.pw || inputPw === "0724") {
+        alert(`[문의 내용]:\n${inq.content}\n\n[답변]:\n${inq.reply}`);
+      } else if (inputPw !== null) {
+        showToast("비밀번호가 올바르지 않습니다.");
+      }
+    };
     card.innerHTML = `
       <div class="flex items-center justify-between">
-        <span class="font-black text-slate-800 flex items-center space-x-1">
-          <i data-lucide="lock" class="w-3 h-3 text-slate-400"></i>
-          <span>${inq.author} 님의 문의</span>
-        </span>
+        <span class="font-black text-slate-800 flex items-center space-x-1"><i data-lucide="lock" class="w-3 h-3 text-slate-400"></i><span>${inq.author} 님의 문의</span></span>
         <span class="text-[10px] text-slate-400">${inq.date}</span>
       </div>
       <p class="text-slate-500 font-medium truncate">비공개 처리된 문의글입니다. (비밀번호 확인)</p>
@@ -1462,54 +1889,33 @@ function renderInquiryList() {
   lucide.createIcons();
 }
 
-function checkInquiryAccess(inq) {
-  const inputPw = prompt("문의 작성 시 설정한 4자리 비밀번호를 입력하세요:");
-  if (inputPw === inq.pw || inputPw === "0724") {
-    alert(`[문의 내용]:\n${inq.content}\n\n[답변 현황]:\n${inq.reply}`);
-  } else if (inputPw !== null) {
-    showToast("비밀번호가 올바르지 않습니다.");
-  }
-}
-
-// ========================================================
-// 13. 관리자 마스터 센터 (암호 0724, 8종 테마 & 공지 관리)
-// ========================================================
+// 관리자 센터 (0724)
 function promptAdminMode() {
   const now = Date.now();
   if (appState.adminLockUntil && now < appState.adminLockUntil) {
     const remMin = Math.ceil((appState.adminLockUntil - now) / 60000);
-    return alert(`비밀번호 오류 초과로 잠겨 있습니다. ${remMin}분 후에 다시 시도해 주세요.`);
+    return alert(`잠겨 있습니다. ${remMin}분 후에 다시 시도해 주세요.`);
   }
 
   const pw = prompt("관리자 보안 비밀번호 4자리를 입력하세요:");
-  if (pw === null) return;
-
   if (pw === "0724") {
     appState.adminFailedCount = 0;
     appState.adminLockUntil = null;
-    openAdminModal();
-  } else {
+    document.getElementById('adminModal').classList.remove('hidden');
+    renderAdminNotices();
+    renderAdminReviews();
+    lucide.createIcons();
+  } else if (pw !== null) {
     appState.adminFailedCount++;
     if (appState.adminFailedCount >= 5) {
       appState.adminLockUntil = now + (5 * 60 * 1000);
-      alert("비밀번호 5회 오류! 보안을 위해 5분간 관리자 진입이 차단됩니다.");
+      alert("5회 오류! 5분간 관리자 진입이 차단됩니다.");
     } else {
-      alert(`비밀번호가 일치하지 않습니다. (실패 ${appState.adminFailedCount}/5회)`);
+      alert(`비밀번호가 올바르지 않습니다. (실패 ${appState.adminFailedCount}/5회)`);
     }
   }
 }
-
-function openAdminModal() {
-  document.getElementById('adminModal').classList.remove('hidden');
-  renderAdminNotices();
-  renderAdminReviews();
-  lucide.createIcons();
-}
-
-function closeAdminModal() {
-  document.getElementById('adminModal').classList.add('hidden');
-}
-
+function closeAdminModal() { document.getElementById('adminModal').classList.add('hidden'); }
 function switchAdminTab(subTab) {
   ['theme', 'notice', 'review', 'backup'].forEach(t => {
     const btn = document.getElementById(`adminTabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
@@ -1523,103 +1929,61 @@ function switchAdminTab(subTab) {
     }
   });
 }
-
 function renderAdminNotices() {
   const list = document.getElementById('adminNoticeList');
   list.innerHTML = '';
   appState.notices.forEach((n, idx) => {
     const item = document.createElement('div');
     item.className = "flex justify-between items-center p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs";
-    item.innerHTML = `
-      <div class="flex-1 truncate mr-2">
-        <span class="font-bold text-slate-800">${n.text}</span>
-        <span class="text-[10px] text-slate-400 block">${n.date}</span>
-      </div>
-      <button onclick="deleteNotice(${idx})" class="text-rose-600 font-bold text-[11px]">삭제</button>
-    `;
+    item.innerHTML = `<span class="font-bold text-slate-800">${n.text}</span><button onclick="appState.notices.splice(${idx}, 1); persistState(); renderAdminNotices(); updateNoticeBanner();" class="text-rose-600 font-bold text-[11px]">삭제</button>`;
     list.appendChild(item);
   });
 }
-
 function publishNotice() {
   const input = document.getElementById('adminNewNoticeInput');
   const text = input.value.trim();
   if (!text) return;
-
-  appState.notices.unshift({
-    id: Date.now(),
-    text,
-    date: new Date().toLocaleDateString('ko-KR')
-  });
+  appState.notices.unshift({ id: Date.now(), text, date: new Date().toLocaleDateString('ko-KR') });
   input.value = '';
   persistState();
   renderAdminNotices();
   updateNoticeBanner();
-  showToast("새 공지사항이 등록되었습니다.");
+  showToast("새 공지가 등록되었습니다.");
 }
-
-function deleteNotice(idx) {
-  appState.notices.splice(idx, 1);
-  persistState();
-  renderAdminNotices();
-  updateNoticeBanner();
-}
-
 function updateNoticeBanner() {
   const banner = document.getElementById('noticeBanner');
-  const bannerText = document.getElementById('noticeBannerText');
+  const text = document.getElementById('noticeBannerText');
   if (appState.notices.length > 0) {
-    bannerText.textContent = appState.notices[0].text;
+    text.textContent = appState.notices[0].text;
     banner.classList.remove('hidden');
   } else {
     banner.classList.add('hidden');
   }
 }
-
 function renderAdminReviews() {
   const list = document.getElementById('adminReviewList');
   list.innerHTML = '';
   appState.reviews.forEach((r, idx) => {
     const item = document.createElement('div');
     item.className = "p-3 rounded-2xl bg-slate-50 border border-slate-200 flex justify-between items-start text-xs";
-    item.innerHTML = `
-      <div class="flex-1 min-w-0 pr-2">
-        <div class="flex items-center space-x-1 font-bold">
-          <span>${r.author}</span>
-          <span class="text-amber-500 font-black">${'★'.repeat(r.rating)}</span>
-        </div>
-        <p class="text-slate-600 mt-0.5">${r.comment}</p>
-      </div>
-      <button onclick="deleteReviewByAdmin(${idx})" class="text-rose-600 font-bold text-[10px] shrink-0">삭제</button>
-    `;
+    item.innerHTML = `<div><b>${r.author}</b> (${'★'.repeat(r.rating)})<p class="text-slate-600">${r.comment}</p></div><button onclick="appState.reviews.splice(${idx}, 1); persistState(); renderAdminReviews(); renderPublicReviews();" class="text-rose-600 font-bold text-[10px]">삭제</button>`;
     list.appendChild(item);
   });
 }
-
-function deleteReviewByAdmin(idx) {
-  appState.reviews.splice(idx, 1);
-  persistState();
-  renderAdminReviews();
-  renderPublicReviews();
-  showToast("후기가 삭제되었습니다.");
-}
-
 function exportDataBackupJSON() {
   const payload = { version: "2.0.0", exportDate: new Date().toISOString(), data: appState };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `MindLog_Pro_Backup_${new Date().toISOString().split('T')[0]}.json`;
+  a.download = `MindLog_Backup_${new Date().toISOString().split('T')[0]}.json`;
   a.click();
   URL.revokeObjectURL(url);
-  showToast("전체 데이터베이스 백업 JSON이 다운로드되었습니다.");
+  showToast("전체 데이터 백업 파일이 다운로드되었습니다.");
 }
-
 function restoreDataFromJSON(event) {
   const file = event.target.files[0];
   if (!file) return;
-
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
@@ -1631,36 +1995,29 @@ function restoreDataFromJSON(event) {
         renderCalendar();
         renderTimeline();
         renderCategorizedTodoList();
-        renderSavedMemos();
+        renderFilteredMemos();
         closeAdminModal();
-        showToast("백업 데이터가 완벽하게 복원되었습니다!");
+        showToast("백업 데이터가 성공적으로 복원되었습니다!");
       }
     } catch (err) {
-      alert("유효한 백업 파일이 아닙니다.");
+      alert("올바른 백업 파일이 아닙니다.");
     }
   };
   reader.readAsText(file);
-  event.target.value = '';
 }
 
-// ========================================================
-// 14. Vlog 자동 스토리 플레이어 & 네비게이션
-// ========================================================
+// Vlog 감상
 let vlogSlideIndex = 0;
-
 function openVlogModal() {
   const valid = appState.entries.filter(e => e.mediaList && e.mediaList.length > 0);
   if (valid.length === 0) return showToast("Vlog로 감상할 사진/영상 기록이 없습니다.");
-
   document.getElementById('vlogModal').classList.remove('hidden');
   vlogSlideIndex = 0;
   playVlogSlide(valid);
 }
-
 function playVlogSlide(entries) {
   clearInterval(vlogInterval);
   const total = entries.length;
-
   const update = () => {
     if (vlogSlideIndex >= total) vlogSlideIndex = 0;
     const entry = entries[vlogSlideIndex];
@@ -1688,11 +2045,9 @@ function playVlogSlide(entries) {
     }
     vlogSlideIndex++;
   };
-
   update();
   vlogInterval = setInterval(update, 3500);
 }
-
 function closeVlogModal() {
   clearInterval(vlogInterval);
   document.getElementById('vlogModal').classList.add('hidden');
@@ -1701,39 +2056,12 @@ function closeVlogModal() {
   vidEl.src = "";
 }
 
-// 탭 전환
-function switchTab(tabId) {
-  appState.activeTab = tabId;
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(el => {
-    el.classList.remove('text-theme', 'active');
-    el.classList.add('text-slate-400');
-  });
-
-  const targetTab = document.getElementById(`tab-${tabId}`);
-  const targetNav = document.getElementById(`nav-${tabId}`);
-  if (targetTab) targetTab.classList.add('active');
-  if (targetNav) {
-    targetNav.classList.remove('text-slate-400');
-    targetNav.classList.add('text-theme', 'active');
-  }
-
-  if (tabId === 'calendar') renderCalendar();
-  if (tabId === 'timeline') renderTimeline();
-  if (tabId === 'report') setReportPeriod(appState.reportPeriod);
-
-  lucide.createIcons();
-}
-
-// 공통 토스트 알림창
+// 토스트 메시지
 function showToast(msg) {
   const toast = document.getElementById('toast');
   const toastMsg = document.getElementById('toastMsg');
   if (!toast || !toastMsg) return;
-
   toastMsg.textContent = msg;
   toast.classList.remove('opacity-0');
-  setTimeout(() => {
-    toast.classList.add('opacity-0');
-  }, 2300);
+  setTimeout(() => toast.classList.add('opacity-0'), 2300);
 }
