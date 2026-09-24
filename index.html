@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>마인드로그 Pro v2.0 - AI 일상 기록 & 플래너</title>
+  <title>마인드로그 Pro v2.1 Pro - AI 일상 기록 & 플래너</title>
   
   <!-- Tailwind CSS & Lucide Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -18,7 +18,7 @@
 <body class="bg-slate-100 text-slate-800 flex justify-center min-h-screen antialiased select-none">
 
   <!-- ========================================================
-       손가락 가림 방지 플로팅 경계선 돋보기 (Boundary Loupe)
+       손가락 가림 방지 플로팅 2단계 돋보기 (Boundary Loupe)
        ======================================================== -->
   <div id="stickerLoupe">
     <div id="stickerLoupeContent">✨</div>
@@ -38,23 +38,23 @@
         <div>
           <div class="flex items-center space-x-1.5">
             <h1 class="text-base font-black text-slate-900 tracking-tight">마인드로그 Pro</h1>
-            <span class="text-[9px] font-black bg-theme-light text-theme px-1.5 py-0.5 rounded-md border border-theme-light">v2.0.0</span>
+            <span class="text-[9px] font-black bg-theme-light text-theme px-1.5 py-0.5 rounded-md border border-theme-light">v2.1 Pro</span>
           </div>
           <div class="flex items-center space-x-1.5 text-[10px] font-bold text-slate-400">
-            <span id="headerUserBadge" class="text-theme font-extrabold cursor-pointer" onclick="switchTab('profile')">로그인 필요</span>
+            <span id="headerUserBadge" class="text-theme font-extrabold cursor-pointer hover:underline" onclick="handleHeaderUserClick()">로그인 필요</span>
             <span>•</span>
             <span id="subHeaderDate">2026. 09. 25 (금)</span>
           </div>
         </div>
       </div>
 
-      <!-- 헤더 액션 아이콘 모음 -->
+      <!-- 상단 액션 아이콘 모음 -->
       <div class="flex items-center space-x-1.5">
         <!-- 월간 매거진 보기/인쇄 -->
         <button onclick="openMagazineModal()" class="w-8 h-8 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-center text-slate-500 hover:text-indigo-600 transition shadow-2xs" title="월간 매거진">
           <i data-lucide="newspaper" class="w-4 h-4"></i>
         </button>
-        <!-- 후기 모달 -->
+        <!-- 사용자 후기 -->
         <button onclick="openReviewModal()" class="w-8 h-8 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-center text-slate-500 hover:text-amber-500 transition shadow-2xs" title="앱 후기">
           <i data-lucide="star" class="w-4 h-4"></i>
         </button>
@@ -69,11 +69,11 @@
       </div>
     </header>
 
-    <!-- 롤링 공지 배너 -->
+    <!-- 롤링 공지 배너 (v2.1 Pro 업데이트 알림) -->
     <div id="noticeBanner" class="bg-indigo-50/80 border-b border-indigo-100 px-4 py-2 flex items-center justify-between text-xs text-indigo-900 no-print">
       <div class="flex items-center space-x-2 overflow-hidden">
-        <span class="px-1.5 py-0.5 bg-theme text-white text-[9px] font-black rounded shrink-0">공지</span>
-        <span id="noticeBannerText" class="truncate font-semibold text-[11px]">마인드로그 Pro v2.0 정식 배포 안내</span>
+        <span class="px-1.5 py-0.5 bg-theme text-white text-[9px] font-black rounded shrink-0">v2.1 Pro</span>
+        <span id="noticeBannerText" class="truncate font-semibold text-[11px]">[v2.1 Pro] 애플펜슬 드로잉 지원, 날짜/스티커 터치 버그 수정, 내 정보(마이페이지) 통합</span>
       </div>
       <button onclick="document.getElementById('noticeBanner').classList.add('hidden')" class="text-indigo-400 hover:text-indigo-700 ml-2">
         <i data-lucide="x" class="w-3.5 h-3.5"></i>
@@ -84,7 +84,7 @@
     <main class="flex-1 overflow-y-auto px-4 py-4 space-y-5 lg:p-6">
       
       <!-- ========================================================
-           [탭 1] 캘린더 홈 (Month/Week, 스티커 캔버스, 인디케이터)
+           [탭 1] 캘린더 홈 (Month/Week, 애플펜슬 드로잉, 스티커)
            ======================================================== -->
       <section id="tab-calendar" class="tab-content active space-y-4">
         
@@ -124,12 +124,20 @@
           </div>
 
           <div class="flex items-center space-x-1.5">
+            <!-- 애플펜슬 드로잉 캔버스 활성화 토글 버튼 -->
+            <button onclick="toggleDrawingMode()" id="btnToggleDrawMode" class="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-indigo-600 transition shadow-2xs" title="펜슬 손글씨/그리기 모드">
+              <i data-lucide="pen-tool" class="w-4 h-4"></i>
+            </button>
+            <!-- 손글씨 레이어 숨김/표시 (Eye Toggle) -->
+            <button onclick="toggleDrawingVisibility()" id="btnToggleDrawVis" class="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-indigo-600 transition shadow-2xs" title="손글씨 표시/숨김">
+              <i id="iconDrawVis" data-lucide="eye" class="w-4 h-4"></i>
+            </button>
             <!-- 월간 / 주간 토글 -->
             <div class="flex bg-slate-200/70 p-0.5 rounded-xl text-[11px] font-bold">
               <button onclick="setCalendarMode('month')" id="btnCalMonth" class="px-2.5 py-1 rounded-lg bg-white text-theme shadow-xs">월간</button>
               <button onclick="setCalendarMode('week')" id="btnCalWeek" class="px-2.5 py-1 rounded-lg text-slate-500">주간</button>
             </div>
-            <!-- Vlog 감상 버튼 -->
+            <!-- Vlog 감상 -->
             <button onclick="openVlogModal()" class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[11px] font-black px-3 py-1.5 rounded-xl flex items-center space-x-1 shadow-sm active:scale-95 transition">
               <i data-lucide="play" class="w-3 h-3 fill-current"></i>
               <span>Vlog</span>
@@ -137,9 +145,38 @@
           </div>
         </div>
 
-        <!-- 캘린더 그리드 & 스티커 오버레이 -->
-        <div class="bg-white border border-slate-200/90 rounded-3xl p-3 sm:p-4 shadow-xs relative overflow-hidden">
-          <!-- 스티커 오버레이 캔버스 -->
+        <!-- 캘린더 그리드 & 드로잉 캔버스 & 스티커 오버레이 -->
+        <div id="calendarWrapper" class="bg-white border border-slate-200/90 rounded-3xl p-3 sm:p-4 shadow-xs relative overflow-hidden">
+          
+          <!-- 🌟 스타일러스(애플펜슬/S펜) 벡터 드로잉 캔버스 -->
+          <canvas id="drawingCanvas"></canvas>
+
+          <!-- 🌟 플로팅 미니 펜툴 바 (드로잉 모드 활성화 시 표시) -->
+          <div id="drawingToolbar" class="hidden-toolbar">
+            <button onclick="setDrawingTool('pen')" id="btnToolPen" class="draw-tool-btn active" title="잉크 펜"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+            <button onclick="setDrawingTool('highlighter')" id="btnToolHighlighter" class="draw-tool-btn" title="형광펜"><i data-lucide="highlighter" class="w-4 h-4"></i></button>
+            <button onclick="setDrawingTool('eraser')" id="btnToolEraser" class="draw-tool-btn" title="지우개"><i data-lucide="eraser" class="w-4 h-4"></i></button>
+            
+            <div class="h-4 w-[1px] bg-slate-200 mx-0.5"></div>
+            
+            <!-- 컬러 도트 팔레트 -->
+            <div class="flex items-center space-x-1" id="drawingPaletteColors">
+              <span onclick="setDrawingColor('#0f172a', this)" class="palette-color-dot active" style="background-color: #0f172a;"></span>
+              <span onclick="setDrawingColor('#e11d48', this)" class="palette-color-dot" style="background-color: #e11d48;"></span>
+              <span onclick="setDrawingColor('#2563eb', this)" class="palette-color-dot" style="background-color: #2563eb;"></span>
+              <span onclick="setDrawingColor('#10b981', this)" class="palette-color-dot" style="background-color: #10b981;"></span>
+              <span onclick="setDrawingColor('#f59e0b', this)" class="palette-color-dot" style="background-color: #f59e0b;"></span>
+              <span onclick="setDrawingColor('#8b5cf6', this)" class="palette-color-dot" style="background-color: #8b5cf6;"></span>
+            </div>
+
+            <div class="h-4 w-[1px] bg-slate-200 mx-0.5"></div>
+
+            <button onclick="undoDrawingStroke()" class="draw-tool-btn" title="실행 취소 (Undo)"><i data-lucide="undo-2" class="w-4 h-4"></i></button>
+            <button onclick="clearAllDrawingStrokes()" class="draw-tool-btn hover:text-rose-600" title="전체 지우기"><i data-lucide="trash" class="w-4 h-4"></i></button>
+            <button onclick="toggleDrawingMode()" class="draw-tool-btn text-rose-500 font-bold" title="필기 닫기"><i data-lucide="check" class="w-4 h-4"></i></button>
+          </div>
+
+          <!-- 스티커 오버레이 캔버스 (클릭 통과 처리됨) -->
           <div id="calendarStickerCanvas" class="sticker-canvas-container"></div>
 
           <!-- 요일 헤더 (일요일 빨강, 토요일 파랑) -->
@@ -161,7 +198,7 @@
         <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex items-center justify-between">
           <div class="flex items-center space-x-1.5">
             <i data-lucide="sparkle" class="w-4 h-4 text-amber-500"></i>
-            <span class="text-xs font-black text-slate-800">달력 스티커 꾸미기 스튜디오</span>
+            <span class="text-xs font-black text-slate-800">스티커 꾸미기 스튜디오</span>
           </div>
           <button onclick="openStickerStudioModal()" class="bg-white border border-slate-200 text-slate-700 font-bold text-xs px-3 py-1.5 rounded-xl shadow-2xs hover:border-amber-400 transition active:scale-95">
             스티커 추가하기
@@ -170,7 +207,7 @@
       </section>
 
       <!-- ========================================================
-           [탭 2] 오늘의 기록 (와이드 미디어, 음성 메모 믹스, AI 일기)
+           [탭 2] 오늘의 기록 (와이드 미디어, 음성 메모, AI 인터뷰, 일기)
            ======================================================== -->
       <section id="tab-record" class="tab-content space-y-4">
         
@@ -194,7 +231,6 @@
             <span id="mediaCountBadge" class="text-[11px] font-bold text-slate-400">0 / 3</span>
           </div>
 
-          <!-- 통합 단일 미디어 버튼 -->
           <button onclick="openMediaBottomSheet()" type="button" class="w-full py-3.5 bg-white border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-2xl flex items-center justify-center space-x-2 text-slate-600 hover:text-indigo-600 transition active:scale-98 shadow-2xs">
             <i data-lucide="image-plus" class="w-5 h-5 text-indigo-600"></i>
             <span class="text-xs font-black">📷 사진 / 영상 담기 (앨범·촬영 선택)</span>
@@ -204,7 +240,7 @@
           <div id="wideMediaContainer" class="pt-1"></div>
         </div>
 
-        <!-- 🎙️ 음성 메모 일기 믹스 (Voice-to-Diary) 위젯 -->
+        <!-- 🎙️ 음성 메모 일기 믹스 (Voice-to-Diary) -->
         <div class="bg-rose-50/60 border border-rose-200/80 rounded-3xl p-4 shadow-xs space-y-2.5">
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-1.5">
@@ -231,8 +267,23 @@
               </button>
             </div>
           </div>
-          <!-- 변환된 음성 텍스트 프리뷰 -->
           <div id="voiceTranscriptArea" class="hidden bg-white/90 border border-rose-200 rounded-xl p-2.5 text-xs text-slate-700 font-medium whitespace-pre-line leading-relaxed"></div>
+        </div>
+
+        <!-- 💬 대화형 인터뷰 일기 모드 (AI Interviewer) -->
+        <div class="bg-indigo-50/60 border border-indigo-100 rounded-3xl p-4 shadow-xs space-y-2">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-black text-indigo-950 flex items-center space-x-1.5">
+              <i data-lucide="sparkles" class="w-4 h-4 text-theme"></i>
+              <span>AI 인터뷰어의 오늘의 질문 (선택)</span>
+            </h3>
+            <button onclick="refreshInterviewQuestion()" class="text-[10px] font-bold text-theme hover:underline flex items-center space-x-0.5">
+              <i data-lucide="rotate-cw" class="w-3 h-3"></i>
+              <span>질문 바꾸기</span>
+            </button>
+          </div>
+          <p id="aiInterviewQuestionText" class="text-xs font-bold text-slate-800 bg-white p-2.5 rounded-xl border border-indigo-100/80">"오늘 하루 가장 마음이 머물렀던 순간이나 대화는 무엇이었나요?"</p>
+          <input type="text" id="aiInterviewAnswerInput" placeholder="한 줄로 편안하게 답해보세요 (일기에 녹여냅니다)" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none ring-theme font-semibold">
         </div>
 
         <!-- 키워드 엔진 & 최근 키워드 캐시 -->
@@ -253,7 +304,7 @@
           <div id="keywordChipsGrid" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1"></div>
 
           <div class="flex items-center space-x-1.5 pt-1">
-            <input type="text" id="customKeywordInput" placeholder="새 키워드 입력 (예: 호수공원러닝, 중간고사끝)" 
+            <input type="text" id="customKeywordInput" placeholder="새 키워드 입력 (예: 호수공원러닝, 프로젝트끝)" 
               class="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold outline-none ring-theme">
             <button onclick="addCustomKeyword()" type="button" class="bg-theme bg-theme-hover text-white font-bold text-xs px-3.5 py-2 rounded-xl transition active:scale-95">추가</button>
           </div>
@@ -292,7 +343,6 @@
 
             <input type="text" id="finalUserCommentInput" placeholder="나만의 짧은 생각을 덧붙여 보세요 (선택)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-indigo-400 mt-1">
 
-            <!-- 최종 등록 버튼 -->
             <button onclick="commitEntryToCloud()" type="button" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-black py-3.5 rounded-2xl text-xs sm:text-sm transition active:scale-95 shadow-md flex items-center justify-center space-x-1.5 mt-2">
               <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
               <span>오늘의 기록 최종 등록하기</span>
@@ -321,7 +371,6 @@
            [탭 4] 감정 인포그래픽 리포트 (오늘/주/월/년 세분화 통계)
            ======================================================== -->
       <section id="tab-report" class="tab-content space-y-4">
-        <!-- 기간 필터 바 -->
         <div class="grid grid-cols-4 gap-1 bg-slate-100 p-1 rounded-2xl text-center text-xs font-black text-slate-500">
           <button onclick="setReportPeriod('today')" id="btnReportToday" class="py-1.5 rounded-xl">오늘</button>
           <button onclick="setReportPeriod('week')" id="btnReportWeek" class="py-1.5 rounded-xl">이번주</button>
@@ -329,7 +378,6 @@
           <button onclick="setReportPeriod('year')" id="btnReportYear" class="py-1.5 rounded-xl">올해</button>
         </div>
 
-        <!-- 감정 온도계 & AI 조언 -->
         <div class="bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 rounded-3xl p-5 text-white shadow-md space-y-2">
           <div class="flex justify-between items-center">
             <span class="text-[10px] font-extrabold uppercase bg-white/20 px-2 py-0.5 rounded-full">Emotion Analytics</span>
@@ -342,7 +390,6 @@
           <p id="aiMonthlyAdvice" class="text-xs text-white/80 leading-relaxed pt-1 font-medium">"활동적인 에너지와 긍정 감정의 비중이 78%로 매우 건강한 흐름을 유지하고 있습니다."</p>
         </div>
 
-        <!-- 차트 그리드 -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="bg-white border border-slate-200/80 rounded-3xl p-4 shadow-xs">
             <h3 class="text-xs font-black text-slate-800 mb-2 flex items-center space-x-1.5">
@@ -405,14 +452,13 @@
           <ul id="categorizedTodoList" class="space-y-1.5 pt-1 max-h-48 overflow-y-auto"></ul>
         </div>
 
-        <!-- 📝 다차원 메모 시스템 (날짜별 / 주간 / 월간 / 전체 모아보기) -->
+        <!-- 📝 다차원 메모 아카이브 -->
         <div class="bg-white border border-slate-200/80 rounded-3xl p-4 shadow-xs space-y-3">
           <div class="flex items-center justify-between">
             <h3 class="text-xs font-black text-slate-800 flex items-center space-x-1.5">
               <i data-lucide="sticky-note" class="w-4 h-4 text-amber-500"></i>
               <span>다차원 메모 아카이브</span>
             </h3>
-            <!-- 메모 필터 탭 -->
             <div class="flex bg-slate-100 p-0.5 rounded-xl text-[10px] font-bold text-slate-500">
               <button onclick="setMemoFilter('all')" id="btnMemoFilterAll" class="px-2 py-0.5 rounded-lg bg-white text-theme shadow-2xs">전체</button>
               <button onclick="setMemoFilter('week')" id="btnMemoFilterWeek" class="px-2 py-0.5 rounded-lg">이번주</button>
@@ -421,7 +467,6 @@
             </div>
           </div>
 
-          <!-- 메모 입력 영역 -->
           <div class="space-y-2">
             <div class="flex items-center space-x-2">
               <select id="memoTypeSelect" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-slate-700 outline-none">
@@ -429,7 +474,7 @@
                 <option value="date">📅 특정 날짜 지정 메모</option>
               </select>
               <input type="date" id="memoTargetDateInput" class="hidden bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 text-[11px] font-bold text-slate-700 outline-none">
-              <!-- 포스트잇 색상 라벨 선택 -->
+              
               <div class="flex space-x-1">
                 <button type="button" onclick="selectMemoColor('yellow', this)" class="w-5 h-5 rounded-full bg-yellow-200 border-2 border-yellow-400"></button>
                 <button type="button" onclick="selectMemoColor('mint', this)" class="w-5 h-5 rounded-full bg-emerald-200 border border-emerald-300"></button>
@@ -445,143 +490,23 @@
             </div>
           </div>
 
-          <!-- 누적 메모 리스트 -->
           <div id="savedMemosList" class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100 max-h-60 overflow-y-auto"></div>
         </div>
 
-      </section>
-
-      <!-- ========================================================
-           [탭 6] 회원 정보 & 마이 페르소나 (AI 맞춤 설정)
-           ======================================================== -->
-      <section id="tab-profile" class="tab-content space-y-4">
-        <div class="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs space-y-4">
-          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div class="flex items-center space-x-2">
-              <div class="w-9 h-9 rounded-2xl bg-theme text-white flex items-center justify-center font-bold">
-                <i data-lucide="user-check" class="w-5 h-5"></i>
-              </div>
-              <div>
-                <h3 class="text-sm font-black text-slate-900">회원 정보 & AI 마이 페르소나</h3>
-                <p class="text-[10px] text-slate-400 font-semibold">입력하신 성향은 Gemini AI 일기 작성 프롬프트에 실시간 반영됩니다.</p>
-              </div>
-            </div>
-            <button onclick="openAuthModal()" class="text-xs font-bold text-theme bg-theme-light px-2.5 py-1 rounded-xl">계정 전환</button>
-          </div>
-
-          <!-- 프로필 폼 -->
-          <form onsubmit="handleSavePersona(event)" class="space-y-3 text-xs">
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block font-bold text-slate-600 mb-1">직업 / 주 활동</label>
-                <input type="text" id="personaJob" placeholder="예: 고등학교 체육교사, 개발자" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none ring-theme font-semibold">
-              </div>
-              <div>
-                <label class="block font-bold text-slate-600 mb-1">MBTI 성격 유형</label>
-                <select id="personaMbti" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none ring-theme font-semibold">
-                  <option value="ENFP">ENFP (재기발랄한 활동가)</option>
-                  <option value="ENFJ">ENFJ (정의로운 주인공)</option>
-                  <option value="ENTP">ENTP (뜨거운 논쟁가)</option>
-                  <option value="ENTJ">ENTJ (대담한 통솔자)</option>
-                  <option value="ESFP">ESFP (자유로운 연예인)</option>
-                  <option value="ESFJ">ESFJ (친선도모형)</option>
-                  <option value="ESTP">ESTP (모험을 즐기는 사업가)</option>
-                  <option value="ESTJ">ESTJ (엄격한 관리자)</option>
-                  <option value="INFP">INFP (열정적인 중재자)</option>
-                  <option value="INFJ">INFJ (선의의 옹호자)</option>
-                  <option value="INTP">INTP (논리적인 사색가)</option>
-                  <option value="INTJ">INTJ (용의주도한 전략가)</option>
-                  <option value="ISFP">ISFP (호기심 많은 예술가)</option>
-                  <option value="ISFJ">ISFJ (용감한 수호자)</option>
-                  <option value="ISTP">ISTP (만능 재주꾼)</option>
-                  <option value="ISTJ">ISTJ (청렴결백한 논리주의자)</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- 성격 키워드 태그 (다중 선택) -->
-            <div>
-              <label class="block font-bold text-slate-600 mb-1">나의 성격 키워드 (최대 3개)</label>
-              <div id="personaPersonalityChips" class="flex flex-wrap gap-1.5">
-                <!-- JS 렌더링 -->
-              </div>
-            </div>
-
-            <!-- AI 선호 문체 스타일 -->
-            <div>
-              <label class="block font-bold text-slate-600 mb-1">AI 일기 선호 문체</label>
-              <div class="grid grid-cols-2 gap-2">
-                <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
-                  <input type="radio" name="personaTone" value="수필형" checked class="accent-indigo-600">
-                  <div>
-                    <span class="font-bold text-slate-800 block">담담한 수필형</span>
-                    <span class="text-[9px] text-slate-400">여운을 남기는 에세이 톤</span>
-                  </div>
-                </label>
-                <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
-                  <input type="radio" name="personaTone" value="공감형" class="accent-indigo-600">
-                  <div>
-                    <span class="font-bold text-slate-800 block">따뜻한 공감/위로형</span>
-                    <span class="text-[9px] text-slate-400">하루를 다독이는 위안 톤</span>
-                  </div>
-                </label>
-                <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
-                  <input type="radio" name="personaTone" value="성장형" class="accent-indigo-600">
-                  <div>
-                    <span class="font-bold text-slate-800 block">성장/동기부여형</span>
-                    <span class="text-[9px] text-slate-400">도전과 배움을 다지는 톤</span>
-                  </div>
-                </label>
-                <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
-                  <input type="radio" name="personaTone" value="일상형" class="accent-indigo-600">
-                  <div>
-                    <span class="font-bold text-slate-800 block">솔직담백 일상형</span>
-                    <span class="text-[9px] text-slate-400">친구에게 말하듯 편한 톤</span>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            <!-- 간편 4자리 PIN -->
-            <div class="grid grid-cols-2 gap-3 pt-1">
-              <div>
-                <label class="block font-bold text-slate-600 mb-1">간편 로그인 PIN (4자리)</label>
-                <input type="password" id="personaPin" maxlength="4" placeholder="••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none ring-theme font-bold text-center">
-              </div>
-              <div>
-                <label class="block font-bold text-slate-600 mb-1">나만의 기본 테마</label>
-                <select id="personaThemeSelect" onchange="applyAppTheme(this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none ring-theme font-semibold">
-                  <option value="indigo">클래식 인디고</option>
-                  <option value="rose">웜 로즈</option>
-                  <option value="emerald">포레스트 그린</option>
-                  <option value="charcoal">딥 차콜</option>
-                  <option value="orange">선셋 오렌지</option>
-                  <option value="purple">미드나잇 퍼플</option>
-                  <option value="blue">오션 블루</option>
-                  <option value="amber">미니멀 크림</option>
-                </select>
-              </div>
-            </div>
-
-            <button type="submit" class="w-full bg-theme text-white font-black py-3 rounded-2xl text-xs transition active:scale-95 shadow-md mt-2">
-              마이 페르소나 설정 저장하기
-            </button>
-          </form>
-        </div>
       </section>
 
     </main>
 
     <!-- ========================================================
          3. 가변 접이식 하단 네비게이션 독 (Collapsible Dock)
+         - 5대 메인 메뉴 구조 (페르소나 탭은 [내 정보] 모달로 일원화)
          ======================================================== -->
     <div id="bottomDock" class="fixed bottom-0 max-w-md lg:max-w-5xl w-full z-40 no-print">
-      <!-- 슬림 글래스 토글 핸들 -->
       <div id="dockToggleHandle" onclick="toggleBottomDock()" title="메뉴 숨기기/펼치기">
         <i id="dockToggleIcon" data-lucide="chevron-down" class="w-4 h-4 text-slate-500"></i>
       </div>
 
-      <nav class="bg-white/95 backdrop-blur-md border-t border-slate-200 px-5 py-2.5 flex items-center justify-between shadow-2xl">
+      <nav class="bg-white/95 backdrop-blur-md border-t border-slate-200 px-6 py-2.5 flex items-center justify-between shadow-2xl">
         <button onclick="switchTab('calendar')" id="nav-calendar" class="nav-item flex flex-col items-center space-y-1 text-theme active">
           <i data-lucide="calendar" class="w-5 h-5"></i>
           <span class="text-[10px] font-bold">달력</span>
@@ -602,10 +527,6 @@
           <i data-lucide="check-square" class="w-5 h-5"></i>
           <span class="text-[10px] font-bold">플래너</span>
         </button>
-        <button onclick="switchTab('profile')" id="nav-profile" class="nav-item flex flex-col items-center space-y-1 text-slate-400 hover:text-slate-600">
-          <i data-lucide="user" class="w-5 h-5"></i>
-          <span class="text-[10px] font-bold">페르소나</span>
-        </button>
       </nav>
     </div>
 
@@ -623,7 +544,6 @@
         </div>
 
         <div class="grid grid-cols-1 gap-2 pt-1 text-left">
-          <!-- 마인드로그 분기 버튼 -->
           <button id="btnActionSheetMindlog" onclick="handleActionSheetMindlog()" class="p-3 bg-indigo-50/70 border border-indigo-100 rounded-2xl flex items-center justify-between text-slate-800 hover:border-indigo-300 active:scale-98 transition">
             <div class="flex items-center space-x-3">
               <div class="w-10 h-10 rounded-xl bg-theme text-white flex items-center justify-center shrink-0">
@@ -637,7 +557,6 @@
             <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
           </button>
 
-          <!-- 스케줄 / 일정 등록 -->
           <button onclick="handleActionSheetSchedule()" class="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-slate-800 hover:border-slate-300 active:scale-98 transition">
             <div class="flex items-center space-x-3">
               <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
@@ -651,7 +570,6 @@
             <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
           </button>
 
-          <!-- 날짜 메모 작성 -->
           <button onclick="handleActionSheetMemo()" class="p-3 bg-amber-50/60 border border-amber-200/80 rounded-2xl flex items-center justify-between text-slate-800 hover:border-amber-300 active:scale-98 transition">
             <div class="flex items-center space-x-3">
               <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
@@ -710,22 +628,16 @@
           <button onclick="closeStickerStudioModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-4 h-4"></i></button>
         </div>
 
-        <!-- 서브 탭: 이모지 / 레터링 / 직접입력 -->
         <div class="flex bg-slate-100 p-1 rounded-xl text-xs font-bold text-slate-500 shrink-0">
           <button onclick="switchStickerSubTab('emoji')" id="tabStickerEmoji" class="flex-1 py-1.5 rounded-lg bg-white text-theme shadow-2xs">이모티콘</button>
           <button onclick="switchStickerSubTab('lettering')" id="tabStickerLettering" class="flex-1 py-1.5 rounded-lg">감성 레터링</button>
           <button onclick="switchStickerSubTab('custom')" id="tabStickerCustom" class="flex-1 py-1.5 rounded-lg">직접 타이핑</button>
         </div>
 
-        <!-- 스티커 팔레트 본문 -->
         <div class="flex-1 overflow-y-auto space-y-3 pr-1">
-          <!-- 이모지 팔레트 -->
           <div id="stickerPanelEmoji" class="grid grid-cols-6 gap-2 text-2xl text-center"></div>
-
-          <!-- 감성 레터링 팔레트 -->
           <div id="stickerPanelLettering" class="hidden flex flex-wrap gap-1.5"></div>
 
-          <!-- 직접 타이핑 커스텀 도구 -->
           <div id="stickerPanelCustom" class="hidden space-y-3 text-xs">
             <div>
               <label class="block font-bold text-slate-600 mb-1">스티커 텍스트</label>
@@ -773,7 +685,6 @@
           <button onclick="closeVoiceRecordModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-4 h-4"></i></button>
         </div>
 
-        <!-- 녹음 시간 프리셋 선택 바 -->
         <div class="grid grid-cols-4 gap-1.5 bg-slate-100 p-1 rounded-2xl text-xs font-black text-slate-500">
           <button onclick="setVoicePresetDuration(15)" id="btnVoice15" class="py-1.5 rounded-xl bg-white text-rose-600 shadow-2xs">15초</button>
           <button onclick="setVoicePresetDuration(30)" id="btnVoice30" class="py-1.5 rounded-xl">30초</button>
@@ -781,7 +692,6 @@
           <button onclick="setVoicePresetDuration(60)" id="btnVoice60" class="py-1.5 rounded-xl">60초</button>
         </div>
 
-        <!-- 중앙 레코딩 펄스 마이크 버튼 -->
         <div class="py-4 flex flex-col items-center justify-center space-y-3">
           <button id="recordTriggerBtn" onclick="toggleVoiceRecording()" class="w-20 h-20 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg transition active:scale-90">
             <i id="recordBtnIcon" data-lucide="mic" class="w-8 h-8"></i>
@@ -793,7 +703,6 @@
           <p id="recordHelpMsg" class="text-[11px] text-slate-500 font-semibold">마이크를 탭하여 목소리로 하루를 들려주세요.</p>
         </div>
 
-        <!-- 실시간 STT 텍스트 확인 및 직접 수정 필드 -->
         <div class="space-y-1 text-left">
           <span class="text-[10px] font-bold text-slate-400">전사된 음성 텍스트 (직접 수정 가능):</span>
           <textarea id="voiceSttLiveText" rows="2" placeholder="녹음 중 음성이 실시간으로 텍스트 변환됩니다." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs outline-none font-medium leading-relaxed resize-none"></textarea>
@@ -822,9 +731,7 @@
         </div>
       </div>
 
-      <!-- 매거진 인쇄 캔버스 (A4 2페이지 레이아웃) -->
       <div id="magazinePrintCanvas" class="w-full max-w-3xl bg-white text-slate-900 rounded-3xl shadow-2xl p-8 sm:p-12 space-y-10">
-        <!-- Page 1: 매거진 커버 & 월간 하이라이트 -->
         <div class="magazine-page space-y-6 border-b border-slate-200 pb-10">
           <div class="flex justify-between items-end border-b-2 border-slate-900 pb-3">
             <div>
@@ -834,7 +741,6 @@
             <span id="magMonthDisplay" class="text-sm font-extrabold text-slate-500">2026. SEPTEMBER</span>
           </div>
 
-          <!-- 베스트 하이라이트 사진 뷰 -->
           <div id="magHighlightPhotoWrapper" class="aspect-[16/9] w-full rounded-3xl overflow-hidden bg-slate-100 shadow-md">
             <img id="magHighlightPhoto" src="" class="w-full h-full object-cover">
           </div>
@@ -842,8 +748,8 @@
           <div class="grid grid-cols-2 gap-4 pt-2">
             <div class="bg-slate-50 p-4 rounded-2xl">
               <span class="text-[10px] font-bold text-slate-400 block mb-1">ARCHIVE OWNER</span>
-              <h4 id="magOwnerName" class="text-sm font-black text-slate-900">박운용 님</h4>
-              <p id="magOwnerPersona" class="text-xs text-slate-600 mt-1 font-medium">고등학교 체육교사 • ENFP • 담담한 수필형</p>
+              <h4 id="magOwnerName" class="text-sm font-black text-slate-900">회원 님</h4>
+              <p id="magOwnerPersona" class="text-xs text-slate-600 mt-1 font-medium">일상 여행자 • ENFP • 담담한 수필형</p>
             </div>
             <div class="bg-slate-50 p-4 rounded-2xl">
               <span class="text-[10px] font-bold text-slate-400 block mb-1">EMOTION TEMPERATURE</span>
@@ -853,7 +759,6 @@
           </div>
         </div>
 
-        <!-- Page 2: 주요 일상 스토리 & 감정 통계 -->
         <div class="magazine-page space-y-6">
           <h3 class="text-lg font-black text-slate-900 border-b border-slate-200 pb-2 flex items-center space-x-2">
             <i data-lucide="sparkles" class="w-4 h-4 text-indigo-600"></i>
@@ -896,9 +801,9 @@
     <input type="file" id="cameraPhotoInput" accept="image/*" capture="environment" class="hidden" onchange="handleMediaSelect(event, 'photo')">
     <input type="file" id="videoInput" accept="video/*" class="hidden" onchange="handleVideoSelect(event)">
 
-    <!-- (7) 회원가입 & 로그인 모달 -->
+    <!-- (7) 회원 인증 모달 (로그인 / 회원가입 / 계정 찾기 3탭) -->
     <div id="authModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden p-5 space-y-4">
+      <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden p-5 space-y-4 max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between border-b border-slate-100 pb-2">
           <div class="flex items-center space-x-1.5">
             <i data-lucide="user-circle" class="w-4 h-4 text-theme"></i>
@@ -907,11 +812,14 @@
           <button onclick="closeAuthModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-4 h-4"></i></button>
         </div>
 
+        <!-- 인증 탭 분기: 로그인 / 회원가입 / 계정찾기 -->
         <div class="flex bg-slate-100 p-1 rounded-xl text-xs font-bold text-slate-500">
           <button onclick="switchAuthTab('login')" id="authTabLogin" class="flex-1 py-1.5 rounded-lg bg-white text-theme shadow-2xs">로그인</button>
           <button onclick="switchAuthTab('signup')" id="authTabSignup" class="flex-1 py-1.5 rounded-lg">회원가입</button>
+          <button onclick="switchAuthTab('find')" id="authTabFind" class="flex-1 py-1.5 rounded-lg">계정찾기</button>
         </div>
 
+        <!-- 1) 로그인 폼 -->
         <form id="loginForm" onsubmit="handleLoginSubmit(event)" class="space-y-2.5">
           <div>
             <label class="block text-[11px] font-bold text-slate-600 mb-0.5">이메일 (아이디)</label>
@@ -921,36 +829,210 @@
             <label class="block text-[11px] font-bold text-slate-600 mb-0.5">비밀번호</label>
             <input type="password" id="loginPw" required placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none ring-theme font-bold">
           </div>
+          <div class="flex items-center justify-between text-[11px] pt-1 text-slate-500">
+            <label class="flex items-center space-x-1 cursor-pointer">
+              <input type="checkbox" id="autoLoginCheck" checked class="w-3.5 h-3.5 accent-indigo-600 rounded">
+              <span>30일간 자동 로그인 유지</span>
+            </label>
+            <span onclick="switchAuthTab('find')" class="cursor-pointer hover:underline text-theme">비번 분실?</span>
+          </div>
           <button type="submit" class="w-full bg-theme text-white font-black py-2.5 rounded-xl text-xs shadow-xs transition active:scale-95">로그인</button>
         </form>
 
+        <!-- 2) 회원가입 폼 (사용자구분 삭제, 비밀번호 확인 필수화, 이름/휴대폰 선택화) -->
         <form id="signupForm" onsubmit="handleSignupSubmit(event)" class="hidden space-y-2.5">
           <div>
-            <label class="block text-[11px] font-bold text-slate-600 mb-0.5">이메일 (아이디)</label>
+            <label class="block text-[11px] font-bold text-slate-600 mb-0.5">이메일 (아이디) <span class="text-rose-500">*</span></label>
             <input type="email" id="signupEmail" required placeholder="example@email.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none ring-theme font-semibold">
           </div>
           <div>
-            <label class="block text-[11px] font-bold text-slate-600 mb-0.5">비밀번호</label>
-            <input type="password" id="signupPw" required placeholder="비밀번호" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none ring-theme font-bold">
+            <label class="block text-[11px] font-bold text-slate-600 mb-0.5">비밀번호 <span class="text-rose-500">*</span></label>
+            <input type="password" id="signupPw" required placeholder="비밀번호 입력" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none ring-theme font-bold">
           </div>
           <div>
-            <label class="block text-[11px] font-bold text-slate-600 mb-0.5">생년월일</label>
+            <label class="block text-[11px] font-bold text-slate-600 mb-0.5">비밀번호 확인 <span class="text-rose-500">*</span></label>
+            <input type="password" id="signupPwConfirm" required placeholder="비밀번호 다시 입력" oninput="checkSignupPwMatch()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none ring-theme font-bold">
+            <span id="signupPwMatchMsg" class="text-[10px] font-bold hidden mt-0.5 block"></span>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-600 mb-0.5">생년월일 <span class="text-rose-500">*</span></label>
             <input type="date" id="signupBirth" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none ring-theme font-semibold">
           </div>
-          <div>
-            <label class="block text-[11px] font-bold text-slate-600 mb-1">사용자 구분</label>
-            <div class="grid grid-cols-3 gap-1 text-[11px]">
-              <button type="button" onclick="setSignupRole('학생', this)" class="role-select-btn p-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700">학생</button>
-              <button type="button" onclick="setSignupRole('교사', this)" class="role-select-btn p-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 selected">교사</button>
-              <button type="button" onclick="setSignupRole('일반', this)" class="role-select-btn p-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700">일반</button>
+          <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 mb-0.5">이름 (선택)</label>
+              <input type="text" id="signupName" placeholder="홍길동" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs outline-none font-medium">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 mb-0.5">휴대폰번호 (선택)</label>
+              <input type="tel" id="signupPhone" placeholder="010-0000-0000" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs outline-none font-medium">
             </div>
           </div>
-          <button type="submit" class="w-full bg-theme text-white font-black py-2.5 rounded-xl text-xs shadow-xs transition active:scale-95">회원가입 완료</button>
+          <button type="submit" class="w-full bg-theme text-white font-black py-2.5 rounded-xl text-xs shadow-xs transition active:scale-95 mt-1">회원가입 완료</button>
+        </form>
+
+        <!-- 3) 계정 찾기 (아이디 찾기 / 비밀번호 재설정) -->
+        <div id="findForm" class="hidden space-y-3">
+          <div class="flex border-b border-slate-200 text-xs font-bold text-slate-400">
+            <button onclick="switchFindSubTab('id')" id="tabFindId" class="flex-1 py-1.5 border-b-2 border-theme text-theme">아이디 찾기</button>
+            <button onclick="switchFindSubTab('pw')" id="tabFindPw" class="flex-1 py-1.5 border-b-2 border-transparent">비번 재설정</button>
+          </div>
+
+          <!-- 아이디 찾기 폼 -->
+          <div id="panelFindId" class="space-y-2">
+            <div>
+              <label class="block text-[11px] font-bold text-slate-600 mb-0.5">등록된 이름</label>
+              <input type="text" id="findIdName" placeholder="가입 시 입력한 이름" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none font-semibold">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-600 mb-0.5">생년월일</label>
+              <input type="date" id="findIdBirth" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none font-semibold">
+            </div>
+            <button onclick="executeFindId()" class="w-full bg-slate-900 text-white font-bold py-2 rounded-xl text-xs shadow-xs">아이디 조회</button>
+            <div id="findIdResultBox" class="hidden p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-bold text-center"></div>
+          </div>
+
+          <!-- 비밀번호 재설정 폼 -->
+          <div id="panelFindPw" class="hidden space-y-2">
+            <div>
+              <label class="block text-[11px] font-bold text-slate-600 mb-0.5">가입 이메일</label>
+              <input type="email" id="findPwEmail" placeholder="example@email.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none font-semibold">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-600 mb-0.5">생년월일</label>
+              <input type="date" id="findPwBirth" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none font-semibold">
+            </div>
+            <div id="newPwSection" class="hidden space-y-1.5 pt-1 border-t border-slate-100">
+              <label class="block text-[11px] font-bold text-indigo-700">새 비밀번호 입력</label>
+              <input type="password" id="resetNewPw" placeholder="새로운 비밀번호" class="w-full bg-indigo-50/50 border border-indigo-200 rounded-xl px-3 py-2 text-xs outline-none font-bold">
+            </div>
+            <button onclick="executeFindAndResetPw()" id="btnFindPwSubmit" class="w-full bg-slate-900 text-white font-bold py-2 rounded-xl text-xs shadow-xs">본인 확인</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- (8) 👤 [내 정보 관리 (마이페이지)] 모달 - 페르소나 및 회원설정 일원화 -->
+    <div id="myPageModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl p-5 space-y-4 max-h-[88vh] overflow-y-auto">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center space-x-2">
+            <div class="w-9 h-9 rounded-2xl bg-theme text-white flex items-center justify-center font-bold">
+              <i data-lucide="user-check" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-black text-slate-900">내 정보 관리 & AI 마이 페르소나</h3>
+              <p class="text-[10px] text-slate-400 font-semibold">입력하신 특성은 Gemini AI 일기 프롬프트에 실시간 동적 주입됩니다.</p>
+            </div>
+          </div>
+          <button onclick="closeMyPageModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+
+        <form onsubmit="handleSavePersona(event)" class="space-y-3 text-xs">
+          <!-- 계정 메타 정보 -->
+          <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex justify-between items-center">
+            <div>
+              <span class="text-[10px] font-bold text-slate-400 block">로그인 계정</span>
+              <span id="myPageEmailDisplay" class="font-black text-slate-800 text-xs">user@example.com</span>
+            </div>
+            <button type="button" onclick="logoutCurrentUser()" class="text-rose-600 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-xl font-bold text-[11px]">로그아웃</button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-bold text-slate-600 mb-1">직업 / 생활 환경</label>
+              <input type="text" id="personaJob" placeholder="예: 고등학교 체육교사, 개발자" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none ring-theme font-semibold">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-600 mb-1">MBTI 성격 유형</label>
+              <select id="personaMbti" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none ring-theme font-semibold">
+                <option value="ENFP">ENFP (재기발랄한 활동가)</option>
+                <option value="ENFJ">ENFJ (정의로운 주인공)</option>
+                <option value="ENTP">ENTP (뜨거운 논쟁가)</option>
+                <option value="ENTJ">ENTJ (대담한 통솔자)</option>
+                <option value="ESFP">ESFP (자유로운 연예인)</option>
+                <option value="ESFJ">ESFJ (친선도모형)</option>
+                <option value="ESTP">ESTP (모험을 즐기는 사업가)</option>
+                <option value="ESTJ">ESTJ (엄격한 관리자)</option>
+                <option value="INFP">INFP (열정적인 중재자)</option>
+                <option value="INFJ">INFJ (선의의 옹호자)</option>
+                <option value="INTP">INTP (논리적인 사색가)</option>
+                <option value="INTJ">INTJ (용의주도한 전략가)</option>
+                <option value="ISFP">ISFP (호기심 많은 예술가)</option>
+                <option value="ISFJ">ISFJ (용감한 수호자)</option>
+                <option value="ISTP">ISTP (만능 재주꾼)</option>
+                <option value="ISTJ">ISTJ (청렴결백한 논리주의자)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-600 mb-1">성격 키워드 태그 (최대 3개)</label>
+            <div id="personaPersonalityChips" class="flex flex-wrap gap-1.5"></div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-600 mb-1">AI 일기 선호 문체 스타일</label>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
+                <input type="radio" name="personaTone" value="수필형" checked class="accent-indigo-600">
+                <div>
+                  <span class="font-bold text-slate-800 block">담담한 수필형</span>
+                  <span class="text-[9px] text-slate-400">여운을 남기는 에세이 톤</span>
+                </div>
+              </label>
+              <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
+                <input type="radio" name="personaTone" value="공감형" class="accent-indigo-600">
+                <div>
+                  <span class="font-bold text-slate-800 block">따뜻한 공감/위로형</span>
+                  <span class="text-[9px] text-slate-400">하루를 다독이는 위안 톤</span>
+                </div>
+              </label>
+              <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
+                <input type="radio" name="personaTone" value="성장형" class="accent-indigo-600">
+                <div>
+                  <span class="font-bold text-slate-800 block">성장/동기부여형</span>
+                  <span class="text-[9px] text-slate-400">도전과 배움을 다지는 톤</span>
+                </div>
+              </label>
+              <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
+                <input type="radio" name="personaTone" value="일상형" class="accent-indigo-600">
+                <div>
+                  <span class="font-bold text-slate-800 block">솔직담백 일상형</span>
+                  <span class="text-[9px] text-slate-400">친구에게 말하듯 편한 톤</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 pt-1">
+            <div>
+              <label class="block font-bold text-slate-600 mb-1">간편 로그인 PIN (4자리)</label>
+              <input type="password" id="personaPin" maxlength="4" placeholder="••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none ring-theme font-bold text-center">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-600 mb-1">나만의 기본 테마</label>
+              <select id="personaThemeSelect" onchange="applyAppTheme(this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none ring-theme font-semibold">
+                <option value="indigo">클래식 인디고</option>
+                <option value="rose">웜 로즈</option>
+                <option value="emerald">포레스트 그린</option>
+                <option value="charcoal">딥 차콜</option>
+                <option value="orange">선셋 오렌지</option>
+                <option value="purple">미드나잇 퍼플</option>
+                <option value="blue">오션 블루</option>
+                <option value="amber">미니멀 크림</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" class="w-full bg-theme text-white font-black py-3 rounded-2xl text-xs transition active:scale-95 shadow-md mt-2">
+            설정 저장하기
+          </button>
         </form>
       </div>
     </div>
 
-    <!-- (8) 별점 후기 모달 (전체 공개) -->
+    <!-- (9) 사용자 후기 모달 (전체 공개) -->
     <div id="reviewModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] flex flex-col">
         <div class="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -980,7 +1062,7 @@
       </div>
     </div>
 
-    <!-- (9) 고객센터 비공개 문의 모달 (닉네임 + 비번 4자리) -->
+    <!-- (10) 고객센터 비공개 문의 모달 (닉네임 + 비번 4자리) -->
     <div id="inquiryModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] flex flex-col">
         <div class="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -1004,7 +1086,7 @@
       </div>
     </div>
 
-    <!-- (10) 관리자 마스터 센터 (암호 0724, 8종 테마 & 공지 관리) -->
+    <!-- (11) 관리자 마스터 센터 (암호 0724) -->
     <div id="adminModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
         <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -1016,7 +1098,7 @@
         </div>
 
         <div class="flex border-b border-slate-200 text-xs font-bold bg-white shrink-0">
-          <button onclick="switchAdminTab('theme')" id="adminTabBtnTheme" class="flex-1 py-2.5 border-b-2 border-theme text-theme">🎨 8종 테마/UI</button>
+          <button onclick="switchAdminTab('theme')" id="adminTabBtnTheme" class="flex-1 py-2.5 border-b-2 border-theme text-theme">🎨 8종 테마</button>
           <button onclick="switchAdminTab('notice')" id="adminTabBtnNotice" class="flex-1 py-2.5 border-b-2 border-transparent text-slate-400">📢 공지 관리</button>
           <button onclick="switchAdminTab('review')" id="adminTabBtnReview" class="flex-1 py-2.5 border-b-2 border-transparent text-slate-400">⭐ 후기 관리</button>
           <button onclick="switchAdminTab('backup')" id="adminTabBtnBackup" class="flex-1 py-2.5 border-b-2 border-transparent text-slate-400">💾 DB 백업</button>
@@ -1057,7 +1139,7 @@
       </div>
     </div>
 
-    <!-- (11) 원본 미디어 라이트박스 모달 -->
+    <!-- (12) 원본 미디어 라이트박스 모달 -->
     <div id="lightboxModal" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-3" onclick="closeLightbox()">
       <div class="relative max-w-3xl max-h-[90vh] overflow-hidden" onclick="event.stopPropagation()">
         <img id="lightboxImg" src="" class="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl">
@@ -1067,7 +1149,7 @@
       </div>
     </div>
 
-    <!-- (12) 주간/월간 Vlog 자동 스토리 플레이어 모달 -->
+    <!-- (13) 주간/월간 Vlog 자동 스토리 플레이어 모달 -->
     <div id="vlogModal" class="hidden fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4">
       <div class="w-full max-w-sm aspect-[9/16] bg-slate-900 rounded-3xl overflow-hidden relative shadow-2xl flex flex-col justify-between p-5 text-white">
         <div id="vlogProgressBar" class="w-full bg-white/20 h-1 rounded-full overflow-hidden flex">
@@ -1085,7 +1167,7 @@
       </div>
     </div>
 
-    <!-- (13) 10초 영상 트리머 안내 모달 -->
+    <!-- (14) 10초 영상 트리머 안내 모달 -->
     <div id="videoTrimmerModal" class="hidden fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
       <div class="bg-white rounded-3xl p-5 max-w-sm w-full space-y-3 shadow-2xl">
         <h3 class="text-sm font-black text-rose-600 flex items-center space-x-1.5">
@@ -1108,7 +1190,7 @@
 
   </div>
 
-  <!-- 전용 스크립트 엔진 연결 -->
+  <!-- 전용 스크립트 연결 -->
   <script src="app.js"></script>
 </body>
 </html>
